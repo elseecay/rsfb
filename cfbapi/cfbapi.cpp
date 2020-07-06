@@ -22,6 +22,7 @@ extern "C"
 
     void status_wrapper_free(StatusWrapper* self)
     {
+        static_cast<IDisposable*>(self)->dispose();
         self->~StatusWrapper();
         std::free(self);
     }
