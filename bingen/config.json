@@ -1,0 +1,53 @@
+{
+  "classname": "IMaster",
+
+  "cxx2rust":
+  {
+    "default":
+    {
+      "void": "Void",
+      "char": "Char",
+      "unsigned char": "UChar",
+      "int": "Int",
+      "unsigned": "UInt",
+      "unsigned int": "UInt",
+      "FB_BOOLEAN": "FbBoolean",
+      "intptr_t": "IntPtr",
+      "uintptr_t": "UIntPtr",
+      "ISC_UINT64": "IscUInt64",
+      "ISC_INT64": "IscInt64",
+      "ISC_QUAD": "IscQuad",
+      "ISC_DATE": "IscDate",
+      "ISC_TIME": "IscTime"
+    },
+    "fbinterface":
+    {
+      "StatusType": "StatusWrapper",
+      "IDisposable": "Disposable",
+      "IReferenceCounted": "ReferenceCounted",
+      "IMaster": "Master",
+      "IProvider": "Provider",
+      "IAttachment": "Attachment",
+      "ITransaction": "Transaction",
+      "IRequest": "Request",
+      "IEventCallback": "EventCallback",
+      "IResultSet": "ResultSet",
+      "IBlob": "Blob",
+      "IMessageMetadata": "MessageMetadata",
+      "IEvents": "Events",
+      "IStatement": "Statement",
+      "IStatus": "Status",
+      "IMetadataBuilder": "MetadataBuilder",
+      "ICryptKeyCallback": "CryptKeyCallback",
+      "IService": "Service",
+      "IXpbBuilder": "XpbBuilder",
+      "IUtil": "Util",
+      "IVersionCallback": "VersionCallback",
+      "IOffsetsCallback": "OffsetsCallback",
+      "IDtc": "Dtc",
+      "IConfigManager": "ConfigManager",
+      "IPluginManager": "PluginManager",
+      "ITimerControl": "TimerControl"
+    }
+  }
+}
