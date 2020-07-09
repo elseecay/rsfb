@@ -1,3 +1,4 @@
+from sys import argv
 import json
 import re
 from collections import namedtuple
@@ -37,8 +38,8 @@ def remove_template(content):
 
 
 def remove_virtual(content):
-    r = re.compile(r"\svirtual\s")
-    return r.sub("", content)
+    r = re.compile(r"(^|\W)virtual(\W)")
+    return r.sub(r"\1\2", content)
 
 
 def remove_comments(content):
@@ -82,13 +83,23 @@ def remove_mult_spaces(content):
     return r.sub(" ", content)
 
 
+def remove_spaces_around_semicolon(content):
+    r = re.compile(r"\s;")
+    content = r.sub(";", content)
+    r = re.compile(r";\s")
+    content = r.sub(";", content)
+    return content
+
+
 def clear(content):
     content = remove_function_body(content)
     content = remove_comments(content)
     content = remove_template(content)
+    content = remove_virtual(content)
     content = only_spaces(content)
     content = remove_mult_spaces(content)
-    content = remove_virtual(content)
+    content = remove_spaces_around_semicolon(content)
+    #print(content)
     return content
 
 
@@ -150,7 +161,7 @@ def ctype_tostr(ctype):
 def build_cfunc_string(cfunc):
     ret_str = ctype_tostr(cfunc.rtype)
     name_str = f'{prefix}_{snakecase(cfunc.name)}'
-    args_str = f'{"const " if cfunc.const else ""}{config["classname"]}* self, '
+    args_str = f'{"const " if cfunc.const else ""}{classname}* self, '
     for a in cfunc.args:
         args_str += f'{ctype_tostr(a["type"])} {a["name"]}, '
     args_str = args_str[:-2]
@@ -184,7 +195,7 @@ def build_rtype_trait_string(ctype):
 
 
 def build_rfunc_string(cfunc):
-    this_type = Ctype(config["classname"], True, cfunc.const)
+    this_type = Ctype(classname, True, cfunc.const)
     args_str = f'this: {build_rtype_string(this_type)}, '
     for a in cfunc.args:
         args_str += f'{snakecase(a["name"])}: {build_rtype_string(a["type"])}, '
@@ -219,6 +230,8 @@ def build_rfunc_trait_string(cfunc):
         args_str += f'{snakecase(a["name"])}: {build_rtype_trait_string(tp)}, '
     args_str = args_str[:-2]
     ret_str = build_rtype_trait_string(cfunc.rtype)
+    if ret_str[0] == '&':
+        ret_str = ret_str[1:]
     if ret_str == cxx2rust["default"]["void"]:
         ret_str = ''
     else:
@@ -226,22 +239,17 @@ def build_rfunc_trait_string(cfunc):
     return 'fn %s(%s)%s\n{\n\tunsafe { return %s; }\n}' % (name_str, args_str, ret_str, build_rfncall(cfunc))
 
 
+if len(argv) != 2:
+    raise Exception('Expected classname')
+
 fc = open('config.json', 'r')
 ft = open('target.cpp', 'r')
 fr = open('result.txt', 'w')
 
-
+classname = argv[1]
 config = json.load(fc)
-prefix = snakecase(config['classname'][1:])
+prefix = snakecase(classname[1:] if classname[0] == 'I' else classname)
 cxx2rust = config["cxx2rust"]
-
-#123123
-
-for _, v in cxx2rust["fbinterface"].items():
-    print(v,'|',sep='',end='')
-exit(0)
-
-#123123
 
 content = clear(ft.read())
 lines = funclines(content)

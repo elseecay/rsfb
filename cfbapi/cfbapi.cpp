@@ -18,11 +18,66 @@ extern "C"
         new(self) StatusWrapper(status);
         return static_cast<StatusWrapper*>(self);
     }
-
     void status_wrapper_free(StatusWrapper* self)
     {
         self->~StatusWrapper();
         std::free(self);
+    }
+    void status_wrapper_clear_exception(StatusWrapper* self)
+    {
+        return self->clearException();
+    }
+    void status_wrapper_dispose(StatusWrapper* self)
+    {
+        return self->dispose();
+    }
+    void status_wrapper_init(StatusWrapper* self)
+    {
+        return self->init();
+    }
+    unsigned status_wrapper_get_state(const StatusWrapper* self)
+    {
+        return self->getState();
+    }
+    void status_wrapper_set_errors2(StatusWrapper* self, unsigned length, const intptr_t* value)
+    {
+        return self->setErrors2(length, value);
+    }
+    void status_wrapper_set_warnings2(StatusWrapper* self, unsigned length, const intptr_t* value)
+    {
+        return self->setWarnings2(length, value);
+    }
+    void status_wrapper_set_errors(StatusWrapper* self, const intptr_t* value)
+    {
+        return self->setErrors(value);
+    }
+    void status_wrapper_set_warnings(StatusWrapper* self, const intptr_t* value)
+    {
+        return self->setWarnings(value);
+    }
+    const intptr_t* status_wrapper_get_errors(const StatusWrapper* self)
+    {
+        return self->getErrors();
+    }
+    const intptr_t* status_wrapper_get_warnings(const StatusWrapper* self)
+    {
+        return self->getWarnings();
+    }
+    IStatus* status_wrapper_clone(const StatusWrapper* self)
+    {
+        return self->clone();
+    }
+    FB_BOOLEAN static_wrapper_is_dirty(const StatusWrapper* self)
+    {
+        return static_cast<int>(self->isDirty());
+    }
+    FB_BOOLEAN static_wrapper_has_data(const StatusWrapper* self)
+    {
+        return static_cast<int>(self->hasData());
+    }
+    FB_BOOLEAN static_wrapper_is_empty(const StatusWrapper* self)
+    {
+        return static_cast<int>(self->isEmpty());
     }
 }
 

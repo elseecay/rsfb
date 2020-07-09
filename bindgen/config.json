@@ -1,6 +1,4 @@
 {
-  "classname": "IMaster",
-
   "cxx2rust":
   {
     "default":
@@ -22,6 +20,7 @@
     },
     "fbinterface":
     {
+      "StatusWrapper": "StatusWrapper",
       "StatusType": "StatusWrapper",
       "IDisposable": "Disposable",
       "IReferenceCounted": "ReferenceCounted",

@@ -1,3 +1,5 @@
+mod constants;
+
 pub type Ptr<T> = *mut T;
 pub type CPtr<T> = *const T;
 pub type Void = std::ffi::c_void;
@@ -107,6 +109,20 @@ extern "C"
     // StatusWrapper
     pub fn status_wrapper_new(status: StatusPtr) -> StatusWrapperPtr;
     pub fn status_wrapper_free(this: StatusWrapperPtr);
+    pub fn status_wrapper_clear_exception(this: StatusWrapperPtr);
+    pub fn status_wrapper_dispose(this: StatusWrapperPtr);
+    pub fn status_wrapper_init(this: StatusWrapperPtr);
+    pub fn status_wrapper_get_state(this: StatusWrapperCPtr) -> UInt;
+    pub fn status_wrapper_set_errors2(this: StatusWrapperPtr, length: UInt, value: CPtr<IntPtr>);
+    pub fn status_wrapper_set_warnings2(this: StatusWrapperPtr, length: UInt, value: CPtr<IntPtr>);
+    pub fn status_wrapper_set_errors(this: StatusWrapperPtr, value: CPtr<IntPtr>);
+    pub fn status_wrapper_set_warnings(this: StatusWrapperPtr, value: CPtr<IntPtr>);
+    pub fn status_wrapper_get_errors(this: StatusWrapperCPtr) -> CPtr<IntPtr>;
+    pub fn status_wrapper_get_warnings(this: StatusWrapperCPtr) -> CPtr<IntPtr>;
+    pub fn status_wrapper_clone(this: StatusWrapperCPtr) -> StatusPtr;
+    pub fn static_wrapper_is_dirty(this: StatusWrapperCPtr) -> FbBoolean;
+    pub fn static_wrapper_has_data(this: StatusWrapperCPtr) -> FbBoolean;
+    pub fn static_wrapper_is_empty(this: StatusWrapperCPtr) -> FbBoolean;
 
     // IDisposable
     pub fn disposable_dispose(this: DisposablePtr);
@@ -344,6 +360,76 @@ pub trait IStatus : IDisposable
 
 impl_as_def!(Status, IDisposable, IStatus);
 
+pub trait IStatusWrapper : CxxClass
+{
+    fn new(status: &Status) -> StatusWrapper
+    {
+        unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()) }; }
+    }
+    fn delete(&self)
+    {
+        unsafe { status_wrapper_free(self.get_this()); }
+    }
+    fn clear_exception(&self)
+    {
+        unsafe { return status_wrapper_clear_exception(self.get_this()); }
+    }
+    fn dispose(&self) // disposes internal IStatus
+    {
+        unsafe { return status_wrapper_dispose(self.get_this()); }
+    }
+    fn init(&self)
+    {
+        unsafe { return status_wrapper_init(self.get_this()); }
+    }
+    fn get_state(&self) -> UInt
+    {
+        unsafe { return status_wrapper_get_state(self.get_cthis()); }
+    }
+    fn set_errors2(&self, length: UInt, value: CPtr<IntPtr>)
+    {
+        unsafe { return status_wrapper_set_errors2(self.get_this(), length, value); }
+    }
+    fn set_warnings2(&self, length: UInt, value: CPtr<IntPtr>)
+    {
+        unsafe { return status_wrapper_set_warnings2(self.get_this(), length, value); }
+    }
+    fn set_errors(&self, value: CPtr<IntPtr>)
+    {
+        unsafe { return status_wrapper_set_errors(self.get_this(), value); }
+    }
+    fn set_warnings(&self, value: CPtr<IntPtr>)
+    {
+        unsafe { return status_wrapper_set_warnings(self.get_this(), value); }
+    }
+    fn get_errors(&self) -> CPtr<IntPtr>
+    {
+        unsafe { return status_wrapper_get_errors(self.get_cthis()); }
+    }
+    fn get_warnings(&self) -> CPtr<IntPtr>
+    {
+        unsafe { return status_wrapper_get_warnings(self.get_cthis()); }
+    }
+    fn clone(&self) -> Status
+    {
+        unsafe { return Status{ this: status_wrapper_clone(self.get_cthis()) }; }
+    }
+    fn is_dirty(&self) -> FbBoolean
+    {
+        unsafe { return static_wrapper_is_dirty(self.get_this()); }
+    }
+    fn has_data(&self) -> FbBoolean
+    {
+        unsafe { return static_wrapper_has_data(self.get_this()); }
+    }
+    fn is_empty(&self) -> FbBoolean
+    {
+        unsafe { return static_wrapper_is_empty(self.get_this()); }
+    }
+}
+
+impl_as_def!(StatusWrapper, IStatusWrapper);
+
 pub trait IMaster : CxxClass
 {
     fn get() -> Master
@@ -401,20 +487,6 @@ pub trait IMaster : CxxClass
 }
 
 impl_as_def!(Master, IMaster);
-
-pub trait IStatusWrapper : CxxClass
-{
-    fn new(status: &Status) -> StatusWrapper
-    {
-        unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()) }; }
-    }
-    fn delete(&self)
-    {
-        unsafe { status_wrapper_free(self.get_this()); }
-    }
-}
-
-impl_as_def!(StatusWrapper, IStatusWrapper);
 
 pub trait IUtil : CxxClass
 {
