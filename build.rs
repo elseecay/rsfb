@@ -1,4 +1,6 @@
 use cmake;
+use bindgen;
+use std::path::PathBuf;
 
 fn main()
 {
@@ -7,4 +9,21 @@ fn main()
     let dst = cmake::build("cfbapi");
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-flags=-l stdc++"); // TODO: ?
+
+    let bindings = bindgen::Builder::default()
+        .header("/usr/include/ibase.h")// TODO: ?
+        .ignore_functions()
+        .constified_enum("*")
+        .prepend_enum_name(false)
+        .layout_tests(false) // TODO: may be turn on
+        .rustfmt_bindings(true)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .generate()
+        .expect("Unable to generate bindings");
+
+    // TODO: no warnings for generated file
+    let out_path = PathBuf::from("./src");
+    bindings
+        .write_to_file(out_path.join("fbapi/ibase.rs"))
+        .expect("Couldn't write bindings!");
 }

@@ -1,4 +1,5 @@
-mod constants;
+mod ibase;
+use ibase as ib;
 
 pub type Ptr<T> = *mut T;
 pub type CPtr<T> = *const T;
@@ -14,28 +15,15 @@ pub type ULong = libc::c_ulonglong;
 pub type IntPtr = libc::intptr_t;
 pub type UIntPtr = libc::uintptr_t;
 
-pub type FbBoolean = UChar;
-pub type IscInt64 = Long;
-pub type IscUInt64 = ULong;
-pub type IscDate = Int;
-pub type IscTime = UInt;
-
-#[cfg(target_pointer_width = "64")]
-pub type IscLong = Int;
-#[cfg(target_pointer_width = "64")]
-pub type IscULong = UInt;
-
-#[repr(C)]
-struct GdsQuad
-{
-    quad_high: IscLong,
-    quad_low: IscULong
-}
-
+pub type FbBoolean = ib::FB_BOOLEAN;
+pub type IscInt64 = ib::ISC_INT64;
+pub type IscUInt64 = ib::ISC_UINT64;
+pub type IscDate = ib::ISC_DATE;
+pub type IscTime = ib::ISC_TIME;
+pub type IscLong = ib::ISC_LONG;
+pub type IscULong = ib::ISC_ULONG;
+pub type GdsQuad = ib::GDS_QUAD_t;
 pub type IscQuad = GdsQuad;
-
-
-
 
 
 trait CxxClass
