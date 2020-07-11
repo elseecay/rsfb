@@ -16,7 +16,7 @@ fn example_create_database()
     let status = StatusWrapper::new(&st);
     let dpb = utl.get_xpb_builder(&status, 1, std::ptr::null::<u8>(), 0);
     dpb.insert_int(&status, 4, 4 * 1024);
-    let att = prov.create_database(&status, std::ffi::CString::new("6.fdb").unwrap().as_ptr(), dpb.get_buffer_length(&status), dpb.get_buffer(&status));
+    let att = prov.create_database(&status, std::ffi::CString::new("8.fdb").unwrap().as_ptr(), dpb.get_buffer_length(&status), dpb.get_buffer(&status));
     unsafe
     {
         if st.get_state() & Status::STATE_ERRORS != 0
@@ -30,10 +30,6 @@ fn example_create_database()
     }
     println!("Database created\n");
     att.detach(&status);
-    dpb.dispose();
-    prov.release();
-    st.dispose();
-    status.delete();
 }
 
 #[test]

@@ -8,20 +8,18 @@ using namespace Firebird;
 
 using StatusWrapper = CheckStatusWrapper;
 
+
 extern "C"
 {
     // StatusWrapper
     StatusWrapper* status_wrapper_new(IStatus* status)
     {
         // TODO: check allocation error
-        void* self = std::malloc(sizeof(StatusWrapper));
-        new(self) StatusWrapper(status);
-        return static_cast<StatusWrapper*>(self);
+        return new StatusWrapper(status);
     }
-    void status_wrapper_free(StatusWrapper* self)
+    void status_wrapper_delete(StatusWrapper* self)
     {
-        self->~StatusWrapper();
-        std::free(self);
+        delete self;
     }
     void status_wrapper_clear_exception(StatusWrapper* self)
     {
@@ -79,10 +77,7 @@ extern "C"
     {
         return static_cast<int>(self->isEmpty());
     }
-}
 
-extern "C"
-{
     // IDisposable 
     void disposable_dispose(IDisposable* self)
     {
@@ -99,7 +94,6 @@ extern "C"
     {
         return self->release();
     }
-    // END IReferenceCounted 
 
     // IMaster 
     IStatus* master_get_status(IMaster* self)

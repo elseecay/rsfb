@@ -1,5 +1,5 @@
-mod ibase;
-use ibase as ib;
+pub mod ibase;
+pub use ibase as ib;
 
 pub type Ptr<T> = *mut T;
 pub type CPtr<T> = *const T;
@@ -15,21 +15,22 @@ pub type ULong = libc::c_ulonglong;
 pub type IntPtr = libc::intptr_t;
 pub type UIntPtr = libc::uintptr_t;
 
-pub type FbBoolean = ib::FB_BOOLEAN;
-pub type IscInt64 = ib::ISC_INT64;
-pub type IscUInt64 = ib::ISC_UINT64;
-pub type IscDate = ib::ISC_DATE;
-pub type IscTime = ib::ISC_TIME;
-pub type IscLong = ib::ISC_LONG;
-pub type IscULong = ib::ISC_ULONG;
-pub type GdsQuad = ib::GDS_QUAD_t;
+pub type FbBoolean = ibase::FB_BOOLEAN;
+pub type IscInt64 = ibase::ISC_INT64;
+pub type IscUInt64 = ibase::ISC_UINT64;
+pub type IscDate = ibase::ISC_DATE;
+pub type IscTime = ibase::ISC_TIME;
+pub type IscLong = ibase::ISC_LONG;
+pub type IscULong = ibase::ISC_ULONG;
+pub type GdsQuad = ibase::GDS_QUAD_t;
 pub type IscQuad = GdsQuad;
 
-
-trait CxxClass
+trait CxxClass : Sized
 {
     fn get_this(&self) -> VoidPtr;
     fn get_cthis(&self) -> VoidCPtr;
+    fn is_destroyed(&self) -> bool;
+    fn set_state_destroyed(&mut self);
 }
 
 macro_rules! declare_cxx_class
@@ -52,6 +53,24 @@ macro_rules! declare_cxx_class
             {
                 self.this
             }
+            fn is_destroyed(&self) -> bool
+            {
+                self.this == std::ptr::null_mut::<Void>()
+            }
+            fn set_state_destroyed(&mut self)
+            {
+                self.this = std::ptr::null_mut::<Void>();
+            }
+        }
+        impl Drop for $classname
+        {
+            fn drop(&mut self)
+            {
+                if !self.is_destroyed()
+                {
+                    self.on_drop()
+                }
+            }
         }
     };
 }
@@ -64,6 +83,7 @@ macro_rules! impl_as_def
     }
 }
 
+declare_cxx_class!(Versioned, VersionedPtr, VersionedCPtr);
 declare_cxx_class!(Disposable, DisposablePtr, DisposableCPtr);
 declare_cxx_class!(ReferenceCounted, ReferenceCountedPtr, ReferenceCountedCPtr);
 declare_cxx_class!(Master, MasterPtr, MasterCPtr);
@@ -96,7 +116,7 @@ extern "C"
 {
     // StatusWrapper
     pub fn status_wrapper_new(status: StatusPtr) -> StatusWrapperPtr;
-    pub fn status_wrapper_free(this: StatusWrapperPtr);
+    pub fn status_wrapper_delete(this: StatusWrapperPtr);
     pub fn status_wrapper_clear_exception(this: StatusWrapperPtr);
     pub fn status_wrapper_dispose(this: StatusWrapperPtr);
     pub fn status_wrapper_init(this: StatusWrapperPtr);
@@ -189,7 +209,7 @@ extern "C"
     pub fn xpb_builder_get_buffer(this: XpbBuilderPtr, status: StatusWrapperPtr) -> CPtr<UChar>;
 
     // IAttachment
-    pub fn attachment_detach(this: AttachmentPtr, status: StatusWrapperPtr);
+    pub fn attachment_detach(this: AttachmentPtr, status: StatusWrapperPtr); // object destroyed
     pub fn attachment_prepare(this: AttachmentPtr, status: StatusWrapperPtr, tra: TransactionPtr, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, flags: UInt) -> StatementPtr;
     pub fn attachment_start_transaction(this: AttachmentPtr, status: StatusWrapperPtr, tpb_length: UInt, tpb: CPtr<UChar>) -> TransactionPtr;
     pub fn attachment_execute(this: AttachmentPtr, status: StatusWrapperPtr, transaction: TransactionPtr, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: MessageMetadataPtr, in_buffer: VoidPtr, out_metadata: MessageMetadataPtr, out_buffer: VoidPtr) -> TransactionPtr;
@@ -207,7 +227,7 @@ extern "C"
     // ITransaction
     pub fn transaction_get_info(this: TransactionPtr, status: StatusWrapperPtr, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>);
     pub fn transaction_prepare(this: TransactionPtr, status: StatusWrapperPtr, msg_length: UInt, message: CPtr<UChar>);
-    pub fn transaction_commit(this: TransactionPtr, status: StatusWrapperPtr);
+    pub fn transaction_commit(this: TransactionPtr, status: StatusWrapperPtr); // object destroyed
     pub fn transaction_commit_retaining(this: TransactionPtr, status: StatusWrapperPtr);
     pub fn transaction_rollback(this: TransactionPtr, status: StatusWrapperPtr);
     pub fn transaction_rollback_retaining(this: TransactionPtr, status: StatusWrapperPtr);
@@ -279,13 +299,27 @@ extern "C"
     pub fn fb_get_master_interface() -> MasterPtr;
 }
 
+pub trait IVersioned : CxxClass
+{
+    fn on_drop(&mut self){ }
+}
+
+impl_as_def!(Versioned, IVersioned);
+
 pub trait IDisposable : CxxClass
 {
-    fn dispose(&self)
+    fn dispose(&mut self)
     {
         unsafe { disposable_dispose(self.get_this() as DisposablePtr); }
     }
+    fn on_drop(&mut self)
+    {
+        self.dispose();
+        println!("dispose");
+    }
 }
+
+impl_as_def!(Disposable, IDisposable);
 
 pub trait IReferenceCounted : CxxClass
 {
@@ -293,9 +327,26 @@ pub trait IReferenceCounted : CxxClass
     {
         unsafe { reference_counted_add_ref(self.get_this() as ReferenceCountedPtr); }
     }
-    fn release(&self)
+    fn release(&mut self)
     {
         unsafe { reference_counted_release(self.get_this() as ReferenceCountedPtr); }
+    }
+    fn on_drop(&mut self)
+    {
+        self.release();
+        println!("release");
+    }
+}
+
+impl_as_def!(ReferenceCounted, IReferenceCounted);
+
+pub trait IDeletable : CxxClass // custom destruction operation
+{
+    fn delete(&mut self);
+    fn on_drop(&mut self)
+    {
+        println!("delete");
+        self.delete();
     }
 }
 
@@ -348,15 +399,11 @@ pub trait IStatus : IDisposable
 
 impl_as_def!(Status, IDisposable, IStatus);
 
-pub trait IStatusWrapper : CxxClass
+pub trait IStatusWrapper : IDeletable
 {
     fn new(status: &Status) -> StatusWrapper
     {
         unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()) }; }
-    }
-    fn delete(&self)
-    {
-        unsafe { status_wrapper_free(self.get_this()); }
     }
     fn clear_exception(&self)
     {
@@ -416,9 +463,17 @@ pub trait IStatusWrapper : CxxClass
     }
 }
 
+impl IDeletable for StatusWrapper
+{
+    fn delete(&mut self)
+    {
+        unsafe { status_wrapper_delete(self.get_this()); }
+    }
+}
+
 impl_as_def!(StatusWrapper, IStatusWrapper);
 
-pub trait IMaster : CxxClass
+pub trait IMaster : IVersioned
 {
     fn get() -> Master
     {
@@ -474,9 +529,9 @@ pub trait IMaster : CxxClass
     }
 }
 
-impl_as_def!(Master, IMaster);
+impl_as_def!(Master, IVersioned, IMaster);
 
-pub trait IUtil : CxxClass
+pub trait IUtil : IVersioned
 {
     fn get_fb_version(&self, status: &StatusWrapper, att: &Attachment, callback: &VersionCallback)
     {
@@ -532,12 +587,14 @@ pub trait IUtil : CxxClass
     }
 }
 
-impl_as_def!(Util, IUtil);
+impl_as_def!(Util, IVersioned, IUtil);
 
 pub trait IPluginBase : IReferenceCounted
 {
 
 }
+
+impl_as_def!(PluginBase, IReferenceCounted, IPluginBase);
 
 pub trait IProvider : IPluginBase
 {
@@ -567,6 +624,11 @@ impl_as_def!(Provider, IReferenceCounted, IPluginBase, IProvider);
 
 pub trait IXpbBuilder : IDisposable
 {
+    const DPB: UInt = 1;
+    const SPB_ATTACH: UInt = 2;
+    const SPB_START: UInt = 3;
+    const TPB: UInt = 4;
+
     fn clear(&self, status: &StatusWrapper)
     {
         unsafe { return xpb_builder_clear(self.get_this(), status.this); }
@@ -653,7 +715,7 @@ impl_as_def!(XpbBuilder, IDisposable, IXpbBuilder);
 
 pub trait IAttachment : IReferenceCounted
 {
-    fn detach(&self, status: &StatusWrapper)
+    fn detach(self, status: &StatusWrapper)
     {
         unsafe { attachment_detach(self.get_this(), status.this); }
     }
@@ -723,7 +785,7 @@ pub trait ITransaction : IReferenceCounted
     {
         unsafe { return transaction_prepare(self.get_this(), status.this, msg_length, message); }
     }
-    fn commit(&self, status: &StatusWrapper)
+    fn commit(self, status: &StatusWrapper)
     {
         unsafe { return transaction_commit(self.get_this(), status.this); }
     }
@@ -991,6 +1053,62 @@ pub trait IResultSet : IReferenceCounted
 }
 
 impl_as_def!(ResultSet, IReferenceCounted, IResultSet);
+
+pub trait IPluginManager : IVersioned
+{
+
+}
+
+impl_as_def!(PluginManager, IVersioned, IPluginManager);
+
+pub trait ITimerControl : IVersioned
+{
+
+}
+
+impl_as_def!(TimerControl, IVersioned, ITimerControl);
+
+pub trait IDtc : IVersioned
+{
+
+}
+
+impl_as_def!(Dtc, IVersioned, IDtc);
+
+pub trait IConfigManager : IVersioned
+{
+
+}
+
+impl_as_def!(ConfigManager, IVersioned, IConfigManager);
+
+pub trait IService : IReferenceCounted
+{
+
+}
+
+impl_as_def!(Service, IReferenceCounted, IService);
+
+pub trait ICryptKeyCallback : IVersioned
+{
+
+}
+
+impl_as_def!(CryptKeyCallback, IVersioned, ICryptKeyCallback);
+
+pub trait IVersionCallback : IVersioned
+{
+
+}
+
+impl_as_def!(VersionCallback, IVersioned, IVersionCallback);
+
+pub trait IOffsetsCallback : IVersioned
+{
+
+}
+
+impl_as_def!(OffsetsCallback, IVersioned, IOffsetsCallback);
 
 
 
