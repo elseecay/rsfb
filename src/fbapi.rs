@@ -1,29 +1,8 @@
 pub mod ibase;
 pub use ibase as ib;
+use crate::types::*;
+use crate::{Error, Result};
 
-pub type Ptr<T> = *mut T;
-pub type CPtr<T> = *const T;
-pub type Void = std::ffi::c_void;
-pub type VoidPtr = Ptr<Void>;
-pub type VoidCPtr = CPtr<Void>;
-pub type Int = libc::c_int;
-pub type UInt = libc::c_uint;
-pub type Char = libc::c_schar;
-pub type UChar = libc::c_uchar;
-pub type Long = libc::c_longlong;
-pub type ULong = libc::c_ulonglong;
-pub type IntPtr = libc::intptr_t;
-pub type UIntPtr = libc::uintptr_t;
-
-pub type FbBoolean = ibase::FB_BOOLEAN;
-pub type IscInt64 = ibase::ISC_INT64;
-pub type IscUInt64 = ibase::ISC_UINT64;
-pub type IscDate = ibase::ISC_DATE;
-pub type IscTime = ibase::ISC_TIME;
-pub type IscLong = ibase::ISC_LONG;
-pub type IscULong = ibase::ISC_ULONG;
-pub type GdsQuad = ibase::GDS_QUAD_t;
-pub type IscQuad = GdsQuad;
 
 trait CxxClass : Sized
 {
@@ -176,7 +155,7 @@ extern "C"
     pub fn util_load_blob(this: UtilPtr, status: StatusWrapperPtr, blob_id: Ptr<IscQuad>, att: AttachmentPtr, tra: TransactionPtr, file: CPtr<Char>, txt: FbBoolean);
     pub fn util_dump_blob(this: UtilPtr, status: StatusWrapperPtr, blob_id: Ptr<IscQuad>, att: AttachmentPtr, tra: TransactionPtr, file: CPtr<Char>, txt: FbBoolean);
     pub fn util_get_perf_counters(this: UtilPtr, status: StatusWrapperPtr, att: AttachmentPtr, counters_set: CPtr<Char>, counters: Ptr<IscInt64>);
-    pub fn util_execute_create_database(this: UtilPtr, status: StatusWrapperPtr, stmt_length: UInt, creat_d_bstatement: CPtr<Char>, dialect: UInt, stmt_is_create_db: Ptr<FbBoolean>) -> AttachmentPtr;
+    pub fn util_execute_create_database(this: UtilPtr, status: StatusWrapperPtr, stmt_length: UInt, create_db_statement: CPtr<Char>, dialect: UInt, stmt_is_create_db: Ptr<FbBoolean>) -> AttachmentPtr;
     pub fn util_decode_date(this: UtilPtr, date: IscDate, year: Ptr<UInt>, month: Ptr<UInt>, day: Ptr<UInt>);
     pub fn util_decode_time(this: UtilPtr, time: IscTime, hours: Ptr<UInt>, minutes: Ptr<UInt>, seconds: Ptr<UInt>, fractions: Ptr<UInt>);
     pub fn util_encode_date(this: UtilPtr, year: UInt, month: UInt, day: UInt) -> IscDate;
@@ -315,7 +294,6 @@ pub trait IDisposable : CxxClass
     fn on_drop(&mut self)
     {
         self.dispose();
-        println!("dispose");
     }
 }
 
@@ -334,7 +312,6 @@ pub trait IReferenceCounted : CxxClass
     fn on_drop(&mut self)
     {
         self.release();
-        println!("release");
     }
 }
 
@@ -345,7 +322,6 @@ pub trait IDeletable : CxxClass // custom destruction operation
     fn delete(&mut self);
     fn on_drop(&mut self)
     {
-        println!("delete");
         self.delete();
     }
 }
@@ -399,6 +375,7 @@ pub trait IStatus : IDisposable
 
 impl_as_def!(Status, IDisposable, IStatus);
 
+// TODO: rework
 pub trait IStatusWrapper : IDeletable
 {
     fn new(status: &Status) -> StatusWrapper
@@ -507,9 +484,14 @@ pub trait IMaster : IVersioned
     {
         unsafe { return Transaction{ this: master_register_transaction(self.get_this(), attachment.this, transaction.this) }; }
     }
-    fn get_metadata_builder(&self, status: &StatusWrapper, field_count: UInt) -> MetadataBuilder
+    fn get_metadata_builder(&self, status: &StatusWrapper, field_count: UInt) -> Result<MetadataBuilder>
     {
-        unsafe { return MetadataBuilder{ this: master_get_metadata_builder(self.get_this(), status.this, field_count) }; }
+        let result = unsafe { MetadataBuilder{ this: master_get_metadata_builder(self.get_this(), status.this, field_count) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
     fn server_mode(&self, mode: Int) -> Int
     {
@@ -533,25 +515,50 @@ impl_as_def!(Master, IVersioned, IMaster);
 
 pub trait IUtil : IVersioned
 {
-    fn get_fb_version(&self, status: &StatusWrapper, att: &Attachment, callback: &VersionCallback)
+    fn get_fb_version(&self, status: &StatusWrapper, att: &Attachment, callback: &VersionCallback) -> Result<()>
     {
-        unsafe { return util_get_fb_version(self.get_this(), status.this, att.this, callback.this); }
+        let result = unsafe { util_get_fb_version(self.get_this(), status.this, att.this, callback.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn load_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean)
+    fn load_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> Result<()>
     {
-        unsafe { return util_load_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt); }
+        let result = unsafe { util_load_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn dump_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean)
+    fn dump_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> Result<()>
     {
-        unsafe { return util_dump_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt); }
+        let result = unsafe { util_dump_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_perf_counters(&self, status: &StatusWrapper, att: &Attachment, counters_set: CPtr<Char>, counters: Ptr<IscInt64>)
+    fn get_perf_counters(&self, status: &StatusWrapper, att: &Attachment, counters_set: CPtr<Char>, counters: Ptr<IscInt64>) -> Result<()>
     {
-        unsafe { return util_get_perf_counters(self.get_this(), status.this, att.this, counters_set, counters); }
+        let result = unsafe { util_get_perf_counters(self.get_this(), status.this, att.this, counters_set, counters) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn execute_create_database(&self, status: &StatusWrapper, stmt_length: UInt, creat_d_bstatement: CPtr<Char>, dialect: UInt, stmt_is_create_db: Ptr<FbBoolean>) -> Attachment
+    fn execute_create_database(&self, status: &StatusWrapper, stmt_length: UInt, create_db_statement: CPtr<Char>, dialect: UInt, stmt_is_create_db: Ptr<FbBoolean>) -> Result<Attachment>
     {
-        unsafe { return Attachment{ this: util_execute_create_database(self.get_this(), status.this, stmt_length, creat_d_bstatement, dialect, stmt_is_create_db) }; }
+        let result = unsafe { Attachment{ this: util_execute_create_database(self.get_this(), status.this, stmt_length, create_db_statement, dialect, stmt_is_create_db) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
     fn decode_date(&self, date: IscDate, year: Ptr<UInt>, month: Ptr<UInt>, day: Ptr<UInt>)
     {
@@ -577,13 +584,23 @@ pub trait IUtil : IVersioned
     {
         unsafe { return util_get_client_version(self.get_this()); }
     }
-    fn get_xpb_builder(&self, status: &StatusWrapper, kind: UInt, buf: CPtr<UChar>, len: UInt) -> XpbBuilder
+    fn get_xpb_builder(&self, status: &StatusWrapper, kind: UInt, buf: CPtr<UChar>, len: UInt) -> Result<XpbBuilder>
     {
-        unsafe { return XpbBuilder{ this: util_get_xpb_builder(self.get_this(), status.this, kind, buf, len) }; }
+        let result = unsafe { XpbBuilder{ this: util_get_xpb_builder(self.get_this(), status.this, kind, buf, len) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_offsets(&self, status: &StatusWrapper, metadata: &MessageMetadata, callback: &OffsetsCallback) -> UInt
+    fn set_offsets(&self, status: &StatusWrapper, metadata: &MessageMetadata, callback: &OffsetsCallback) -> Result<UInt>
     {
-        unsafe { return util_set_offsets(self.get_this(), status.this, metadata.this, callback.this); }
+        let result = unsafe { util_set_offsets(self.get_this(), status.this, metadata.this, callback.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -598,25 +615,50 @@ impl_as_def!(PluginBase, IReferenceCounted, IPluginBase);
 
 pub trait IProvider : IPluginBase
 {
-    fn shutdown(&self, status: &StatusWrapper, timeout: UInt, reason: Int)
+    fn shutdown(&self, status: &StatusWrapper, timeout: UInt, reason: Int) -> Result<()>
     {
-        unsafe { provider_shutdown(self.get_this(), status.this, timeout, reason); }
+        let result = unsafe { provider_shutdown(self.get_this(), status.this, timeout, reason) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn attach_database(&self, status: &StatusWrapper, file_name: CPtr<Char>, dpb_length: UInt, dpb: CPtr<UChar>) -> Attachment
+    fn attach_database(&self, status: &StatusWrapper, file_name: CPtr<Char>, dpb_length: UInt, dpb: CPtr<UChar>) -> Result<Attachment>
     {
-        unsafe { return Attachment{ this: provider_attach_database(self.get_this(), status.this, file_name, dpb_length, dpb) }; }
+        let result = unsafe { Attachment{ this: provider_attach_database(self.get_this(), status.this, file_name, dpb_length, dpb) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn create_database(&self, status: &StatusWrapper, file_name: CPtr<Char>, dpb_length: UInt, dpb: CPtr<UChar>) -> Attachment
+    fn create_database(&self, status: &StatusWrapper, file_name: CPtr<Char>, dpb_length: UInt, dpb: CPtr<UChar>) -> Result<Attachment>
     {
-        unsafe { return Attachment{ this: provider_create_database(self.get_this(), status.this, file_name, dpb_length, dpb) }; }
+        let result = unsafe { Attachment{ this: provider_create_database(self.get_this(), status.this, file_name, dpb_length, dpb) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn attach_service_manager(&self, status: &StatusWrapper, service: CPtr<Char>, spb_length: UInt, spb: CPtr<UChar>) -> Service
+    fn attach_service_manager(&self, status: &StatusWrapper, service: CPtr<Char>, spb_length: UInt, spb: CPtr<UChar>) -> Result<Service>
     {
-        unsafe { return Service{ this: provider_attach_service_manager(self.get_this(), status.this, service, spb_length, spb) }; }
+        let result = unsafe { Service{ this: provider_attach_service_manager(self.get_this(), status.this, service, spb_length, spb) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_db_crypt_callback(&self, status: &StatusWrapper, crypt_callback: &CryptKeyCallback)
+    fn set_db_crypt_callback(&self, status: &StatusWrapper, crypt_callback: &CryptKeyCallback) -> Result<()>
     {
-        unsafe { return provider_set_db_crypt_callback(self.get_this(), status.this, crypt_callback.this); }
+        let result = unsafe { provider_set_db_crypt_callback(self.get_this(), status.this, crypt_callback.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -629,85 +671,185 @@ pub trait IXpbBuilder : IDisposable
     const SPB_START: UInt = 3;
     const TPB: UInt = 4;
 
-    fn clear(&self, status: &StatusWrapper)
+    fn clear(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return xpb_builder_clear(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_clear(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn remove_current(&self, status: &StatusWrapper)
+    fn remove_current(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return xpb_builder_remove_current(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_remove_current(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn insert_int(&self, status: &StatusWrapper, tag: UChar, value: Int)
+    fn insert_int(&self, status: &StatusWrapper, tag: UChar, value: Int) -> Result<()>
     {
-        unsafe { return xpb_builder_insert_int(self.get_this(), status.this, tag, value); }
+        let result = unsafe { xpb_builder_insert_int(self.get_this(), status.this, tag, value) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn insert_big_int(&self, status: &StatusWrapper, tag: UChar, value: IscInt64)
+    fn insert_big_int(&self, status: &StatusWrapper, tag: UChar, value: IscInt64) -> Result<()>
     {
-        unsafe { return xpb_builder_insert_big_int(self.get_this(), status.this, tag, value); }
+        let result = unsafe { xpb_builder_insert_big_int(self.get_this(), status.this, tag, value) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn insert_bytes(&self, status: &StatusWrapper, tag: UChar, bytes: CPtr<Void>, length: UInt)
+    fn insert_bytes(&self, status: &StatusWrapper, tag: UChar, bytes: CPtr<Void>, length: UInt) -> Result<()>
     {
-        unsafe { return xpb_builder_insert_bytes(self.get_this(), status.this, tag, bytes, length); }
+        let result = unsafe { xpb_builder_insert_bytes(self.get_this(), status.this, tag, bytes, length) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn insert_string(&self, status: &StatusWrapper, tag: UChar, str: CPtr<Char>)
+    fn insert_string(&self, status: &StatusWrapper, tag: UChar, str: CPtr<Char>) -> Result<()>
     {
-        unsafe { return xpb_builder_insert_string(self.get_this(), status.this, tag, str); }
+        let result = unsafe { xpb_builder_insert_string(self.get_this(), status.this, tag, str) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn insert_tag(&self, status: &StatusWrapper, tag: UChar)
+    fn insert_tag(&self, status: &StatusWrapper, tag: UChar) -> Result<()>
     {
-        unsafe { return xpb_builder_insert_tag(self.get_this(), status.this, tag); }
+        let result = unsafe { xpb_builder_insert_tag(self.get_this(), status.this, tag) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn is_eof(&self, status: &StatusWrapper) -> FbBoolean
+    fn is_eof(&self, status: &StatusWrapper) -> Result<FbBoolean>
     {
-        unsafe { return xpb_builder_is_eof(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_is_eof(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn move_next(&self, status: &StatusWrapper)
+    fn move_next(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return xpb_builder_move_next(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_move_next(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn rewind(&self, status: &StatusWrapper)
+    fn rewind(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return xpb_builder_rewind(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_rewind(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn find_first(&self, status: &StatusWrapper, tag: UChar) -> FbBoolean
+    fn find_first(&self, status: &StatusWrapper, tag: UChar) -> Result<FbBoolean>
     {
-        unsafe { return xpb_builder_find_first(self.get_this(), status.this, tag); }
+        let result = unsafe { xpb_builder_find_first(self.get_this(), status.this, tag) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn find_next(&self, status: &StatusWrapper) -> FbBoolean
+    fn find_next(&self, status: &StatusWrapper) -> Result<FbBoolean>
     {
-        unsafe { return xpb_builder_find_next(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_find_next(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_tag(&self, status: &StatusWrapper) -> UChar
+    fn get_tag(&self, status: &StatusWrapper) -> Result<UChar>
     {
-        unsafe { return xpb_builder_get_tag(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_tag(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_length(&self, status: &StatusWrapper) -> UInt
+    fn get_length(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return xpb_builder_get_length(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_length(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_int(&self, status: &StatusWrapper) -> Int
+    fn get_int(&self, status: &StatusWrapper) -> Result<Int>
     {
-        unsafe { return xpb_builder_get_int(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_int(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_big_int(&self, status: &StatusWrapper) -> IscInt64
+    fn get_big_int(&self, status: &StatusWrapper) -> Result<IscInt64>
     {
-        unsafe { return xpb_builder_get_big_int(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_big_int(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_string(&self, status: &StatusWrapper) -> CPtr<Char>
+    fn get_string(&self, status: &StatusWrapper) -> Result<CPtr<Char>>
     {
-        unsafe { return xpb_builder_get_string(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_string(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_bytes(&self, status: &StatusWrapper) -> CPtr<UChar>
+    fn get_bytes(&self, status: &StatusWrapper) -> Result<CPtr<UChar>>
     {
-        unsafe { return xpb_builder_get_bytes(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_bytes(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_buffer_length(&self, status: &StatusWrapper) -> UInt
+    fn get_buffer_length(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return xpb_builder_get_buffer_length(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_buffer_length(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_buffer(&self, status: &StatusWrapper) -> CPtr<UChar>
+    fn get_buffer(&self, status: &StatusWrapper) -> Result<CPtr<UChar>>
     {
-        unsafe { return xpb_builder_get_buffer(self.get_this(), status.this); }
+        let result = unsafe { xpb_builder_get_buffer(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -715,61 +857,131 @@ impl_as_def!(XpbBuilder, IDisposable, IXpbBuilder);
 
 pub trait IAttachment : IReferenceCounted
 {
-    fn detach(self, status: &StatusWrapper)
+    fn detach(self, status: &StatusWrapper) -> Result<()>
     {
         unsafe { attachment_detach(self.get_this(), status.this); }
+        if status.has_data() != 0
+        {
+            return Err(Error::from_sw(&status));
+        }
+        return Ok(());
     }
-    fn prepare(&self, status: &StatusWrapper, tra: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, flags: UInt) -> Statement
+    fn prepare(&self, status: &StatusWrapper, tra: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, flags: UInt) -> Result<Statement>
     {
-        unsafe { return Statement{ this: attachment_prepare(self.get_this(), status.this, tra.this, stmt_length, sql_stmt, dialect, flags) }; }
+        let result = unsafe { Statement{ this: attachment_prepare(self.get_this(), status.this, tra.this, stmt_length, sql_stmt, dialect, flags) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn start_transaction(&self, status: &StatusWrapper, tpb_length: UInt, tpb: CPtr<UChar>) -> Transaction
+    fn start_transaction(&self, status: &StatusWrapper, tpb_length: UInt, tpb: CPtr<UChar>) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: attachment_start_transaction(self.get_this(), status.this, tpb_length, tpb) }; }
+        let result = unsafe { Transaction{ this: attachment_start_transaction(self.get_this(), status.this, tpb_length, tpb) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Transaction
+    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: attachment_execute(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, out_buffer) }; }
+        let result = unsafe { Transaction{ this: attachment_execute(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, out_buffer) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>)
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
     {
-        unsafe { return attachment_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer); }
+        let result = unsafe { attachment_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn reconnect_transaction(&self, status: &StatusWrapper, length: UInt, id: CPtr<UChar>) -> Transaction
+    fn reconnect_transaction(&self, status: &StatusWrapper, length: UInt, id: CPtr<UChar>) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: attachment_reconnect_transaction(self.get_this(), status.this, length, id) }; }
+        let result = unsafe { Transaction{ this: attachment_reconnect_transaction(self.get_this(), status.this, length, id) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn compile_request(&self, status: &StatusWrapper, blr_length: UInt, blr: CPtr<UChar>) -> Request
+    fn compile_request(&self, status: &StatusWrapper, blr_length: UInt, blr: CPtr<UChar>) -> Result<Request>
     {
-        unsafe { return Request{ this: attachment_compile_request(self.get_this(), status.this, blr_length, blr) }; }
+        let result = unsafe { Request{ this: attachment_compile_request(self.get_this(), status.this, blr_length, blr) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn transact_request(&self, status: &StatusWrapper, transaction: &Transaction, blr_length: UInt, blr: CPtr<UChar>, in_msg_length: UInt, in_msg: CPtr<UChar>, out_msg_length: UInt, out_msg: Ptr<UChar>)
+    fn transact_request(&self, status: &StatusWrapper, transaction: &Transaction, blr_length: UInt, blr: CPtr<UChar>, in_msg_length: UInt, in_msg: CPtr<UChar>, out_msg_length: UInt, out_msg: Ptr<UChar>) -> Result<()>
     {
-        unsafe { return attachment_transact_request(self.get_this(), status.this, transaction.this, blr_length, blr, in_msg_length, in_msg, out_msg_length, out_msg); }
+        let result = unsafe { attachment_transact_request(self.get_this(), status.this, transaction.this, blr_length, blr, in_msg_length, in_msg, out_msg_length, out_msg) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn execute_dyn(&self, status: &StatusWrapper, transaction: &Transaction, length: UInt, dn: CPtr<UChar>)
+    fn execute_dyn(&self, status: &StatusWrapper, transaction: &Transaction, length: UInt, dn: CPtr<UChar>) -> Result<()>
     {
-        unsafe { return attachment_execute_dyn(self.get_this(), status.this, transaction.this, length, dn); }
+        let result = unsafe { attachment_execute_dyn(self.get_this(), status.this, transaction.this, length, dn) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn open_cursor(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, cursor_name: CPtr<Char>, cursor_flags: UInt) -> ResultSet
+    fn open_cursor(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, cursor_name: CPtr<Char>, cursor_flags: UInt) -> Result<ResultSet>
     {
-        unsafe { return ResultSet{ this: attachment_open_cursor(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, cursor_name, cursor_flags) }; }
+        let result = unsafe { ResultSet{ this: attachment_open_cursor(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, cursor_name, cursor_flags) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn que_events(&self, status: &StatusWrapper, callback: &EventCallback, length: UInt, events: CPtr<UChar>) -> Events
+    fn que_events(&self, status: &StatusWrapper, callback: &EventCallback, length: UInt, events: CPtr<UChar>) -> Result<Events>
     {
-        unsafe { return Events{ this: attachment_que_events(self.get_this(), status.this, callback.this, length, events) }; }
+        let result = unsafe { Events{ this: attachment_que_events(self.get_this(), status.this, callback.this, length, events) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn cancel_operation(&self, status: &StatusWrapper, option: Int)
+    fn cancel_operation(&self, status: &StatusWrapper, option: Int) -> Result<()>
     {
-        unsafe { return attachment_cancel_operation(self.get_this(), status.this, option); }
+        let result = unsafe { attachment_cancel_operation(self.get_this(), status.this, option) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn ping(&self, status: &StatusWrapper)
+    fn ping(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return attachment_ping(self.get_this(), status.this); }
+        let result = unsafe { attachment_ping(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn drop_database(&self, status: &StatusWrapper)
+    fn drop_database(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return attachment_drop_database(self.get_this(), status.this); }
+        let result = unsafe { attachment_drop_database(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -777,45 +989,95 @@ impl_as_def!(Attachment, IReferenceCounted, IAttachment);
 
 pub trait ITransaction : IReferenceCounted
 {
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>)
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
     {
-        unsafe { return transaction_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer); }
+        let result = unsafe { transaction_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>)
+    fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>) -> Result<()>
     {
-        unsafe { return transaction_prepare(self.get_this(), status.this, msg_length, message); }
+        let result = unsafe { transaction_prepare(self.get_this(), status.this, msg_length, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn commit(self, status: &StatusWrapper)
+    fn commit(self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return transaction_commit(self.get_this(), status.this); }
+        let result = unsafe { transaction_commit(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn commit_retaining(&self, status: &StatusWrapper)
+    fn commit_retaining(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return transaction_commit_retaining(self.get_this(), status.this); }
+        let result = unsafe { transaction_commit_retaining(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn rollback(&self, status: &StatusWrapper)
+    fn rollback(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return transaction_rollback(self.get_this(), status.this); }
+        let result = unsafe { transaction_rollback(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn rollback_retaining(&self, status: &StatusWrapper)
+    fn rollback_retaining(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return transaction_rollback_retaining(self.get_this(), status.this); }
+        let result = unsafe { transaction_rollback_retaining(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn disconnect(&self, status: &StatusWrapper)
+    fn disconnect(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return transaction_disconnect(self.get_this(), status.this); }
+        let result = unsafe { transaction_disconnect(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn join(&self, status: &StatusWrapper, transaction: &Transaction) -> Transaction
+    fn join(&self, status: &StatusWrapper, transaction: &Transaction) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: transaction_join(self.get_this(), status.this, transaction.this) }; }
+        let result = unsafe { Transaction{ this: transaction_join(self.get_this(), status.this, transaction.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn validate(&self, status: &StatusWrapper, attachment: &Attachment) -> Transaction
+    fn validate(&self, status: &StatusWrapper, attachment: &Attachment) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: transaction_validate(self.get_this(), status.this, attachment.this) }; }
+        let result = unsafe { Transaction{ this: transaction_validate(self.get_this(), status.this, attachment.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn enter_dtc(&self, status: &StatusWrapper) -> Transaction
+    fn enter_dtc(&self, status: &StatusWrapper) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: transaction_enter_dtc(self.get_this(), status.this) }; }
+        let result = unsafe { Transaction{ this: transaction_enter_dtc(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -823,49 +1085,118 @@ impl_as_def!(Transaction, IReferenceCounted, ITransaction);
 
 pub trait IStatement : IReferenceCounted
 {
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>)
+    const PREPARE_PREFETCH_NONE: UInt = 0;
+    const PREPARE_PREFETCH_TYPE: UInt = 1;
+    const PREPARE_PREFETCH_INPUT_PARAMETERS: UInt = 2;
+    const PREPARE_PREFETCH_OUTPUT_PARAMETERS: UInt = 4;
+    const PREPARE_PREFETCH_LEGACY_PLAN: UInt = 8;
+    const PREPARE_PREFETCH_DETAILED_PLAN: UInt = 16;
+    const PREPARE_PREFETCH_AFFECTED_RECORDS: UInt = 32;
+    const PREPARE_PREFETCH_FLAGS: UInt = 64;
+    const PREPARE_PREFETCH_METADATA: UInt = Self::PREPARE_PREFETCH_TYPE | Self::PREPARE_PREFETCH_FLAGS | Self::PREPARE_PREFETCH_INPUT_PARAMETERS | Self::PREPARE_PREFETCH_OUTPUT_PARAMETERS;
+    const PREPARE_PREFETCH_ALL: UInt = Self::PREPARE_PREFETCH_METADATA | Self::PREPARE_PREFETCH_LEGACY_PLAN | Self::PREPARE_PREFETCH_DETAILED_PLAN | Self::PREPARE_PREFETCH_AFFECTED_RECORDS;
+    const FLAG_HAS_CURSOR: UInt = 1;
+    const FLAG_REPEAT_EXECUTE: UInt = 2;
+    const CURSOR_TYPE_SCROLLABLE: UInt = 1;
+
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
     {
-        unsafe { return statement_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer); }
+        let result = unsafe { statement_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_type(&self, status: &StatusWrapper) -> UInt
+    fn get_type(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return statement_get_type(self.get_this(), status.this); }
+        let result = unsafe { statement_get_type(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_plan(&self, status: &StatusWrapper, detailed: FbBoolean) -> CPtr<Char>
+    fn get_plan(&self, status: &StatusWrapper, detailed: FbBoolean) -> Result<CPtr<Char>>
     {
-        unsafe { return statement_get_plan(self.get_this(), status.this, detailed); }
+        let result = unsafe { statement_get_plan(self.get_this(), status.this, detailed) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_affected_records(&self, status: &StatusWrapper) -> IscUInt64
+    fn get_affected_records(&self, status: &StatusWrapper) -> Result<IscUInt64>
     {
-        unsafe { return statement_get_affected_records(self.get_this(), status.this); }
+        let result = unsafe { statement_get_affected_records(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_input_metadata(&self, status: &StatusWrapper) -> MessageMetadata
+    fn get_input_metadata(&self, status: &StatusWrapper) -> Result<MessageMetadata>
     {
-        unsafe { return MessageMetadata{ this: statement_get_input_metadata(self.get_this(), status.this) }; }
+        let result = unsafe { MessageMetadata{ this: statement_get_input_metadata(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_output_metadata(&self, status: &StatusWrapper) -> MessageMetadata
+    fn get_output_metadata(&self, status: &StatusWrapper) -> Result<MessageMetadata>
     {
-        unsafe { return MessageMetadata{ this: statement_get_output_metadata(self.get_this(), status.this) }; }
+        let result = unsafe { MessageMetadata{ this: statement_get_output_metadata(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Transaction
+    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<Transaction>
     {
-        unsafe { return Transaction{ this: statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) }; }
+        let result = unsafe { Transaction{ this: statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn open_cursor(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, flags: UInt) -> ResultSet
+    fn open_cursor(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, flags: UInt) -> Result<ResultSet>
     {
-        unsafe { return ResultSet{ this: statement_open_cursor(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, flags) }; }
+        let result = unsafe { ResultSet{ this: statement_open_cursor(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, flags) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_cursor_name(&self, status: &StatusWrapper, name: CPtr<Char>)
+    fn set_cursor_name(&self, status: &StatusWrapper, name: CPtr<Char>) -> Result<()>
     {
-        unsafe { return statement_set_cursor_name(self.get_this(), status.this, name); }
+        let result = unsafe { statement_set_cursor_name(self.get_this(), status.this, name) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn free(&self, status: &StatusWrapper)
+    fn free(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return statement_free(self.get_this(), status.this); }
+        let result = unsafe { statement_free(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_flags(&self, status: &StatusWrapper) -> UInt
+    fn get_flags(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return statement_get_flags(self.get_this(), status.this); }
+        let result = unsafe { statement_get_flags(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -873,65 +1204,140 @@ impl_as_def!(Statement, IReferenceCounted, IStatement);
 
 pub trait IMessageMetadata : IReferenceCounted
 {
-    fn get_count(&self, status: &StatusWrapper) -> UInt
+    fn get_count(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_count(self.get_this(), status.this); }
+        let result = unsafe { message_metadata_get_count(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_field(&self, status: &StatusWrapper, index: UInt) -> CPtr<Char>
+    fn get_field(&self, status: &StatusWrapper, index: UInt) -> Result<CPtr<Char>>
     {
-        unsafe { return message_metadata_get_field(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_field(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_relation(&self, status: &StatusWrapper, index: UInt) -> CPtr<Char>
+    fn get_relation(&self, status: &StatusWrapper, index: UInt) -> Result<CPtr<Char>>
     {
-        unsafe { return message_metadata_get_relation(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_relation(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_owner(&self, status: &StatusWrapper, index: UInt) -> CPtr<Char>
+    fn get_owner(&self, status: &StatusWrapper, index: UInt) -> Result<CPtr<Char>>
     {
-        unsafe { return message_metadata_get_owner(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_owner(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_alias(&self, status: &StatusWrapper, index: UInt) -> CPtr<Char>
+    fn get_alias(&self, status: &StatusWrapper, index: UInt) -> Result<CPtr<Char>>
     {
-        unsafe { return message_metadata_get_alias(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_alias(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_type(&self, status: &StatusWrapper, index: UInt) -> UInt
+    fn get_type(&self, status: &StatusWrapper, index: UInt) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_type(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_type(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn is_nullable(&self, status: &StatusWrapper, index: UInt) -> FbBoolean
+    fn is_nullable(&self, status: &StatusWrapper, index: UInt) -> Result<FbBoolean>
     {
-        unsafe { return message_metadata_is_nullable(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_is_nullable(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_sub_type(&self, status: &StatusWrapper, index: UInt) -> Int
+    fn get_sub_type(&self, status: &StatusWrapper, index: UInt) -> Result<Int>
     {
-        unsafe { return message_metadata_get_sub_type(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_sub_type(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_length(&self, status: &StatusWrapper, index: UInt) -> UInt
+    fn get_length(&self, status: &StatusWrapper, index: UInt) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_length(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_length(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_scale(&self, status: &StatusWrapper, index: UInt) -> Int
+    fn get_scale(&self, status: &StatusWrapper, index: UInt) -> Result<Int>
     {
-        unsafe { return message_metadata_get_scale(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_scale(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_char_set(&self, status: &StatusWrapper, index: UInt) -> UInt
+    fn get_char_set(&self, status: &StatusWrapper, index: UInt) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_char_set(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_char_set(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_offset(&self, status: &StatusWrapper, index: UInt) -> UInt
+    fn get_offset(&self, status: &StatusWrapper, index: UInt) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_offset(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_offset(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_null_offset(&self, status: &StatusWrapper, index: UInt) -> UInt
+    fn get_null_offset(&self, status: &StatusWrapper, index: UInt) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_null_offset(self.get_this(), status.this, index); }
+        let result = unsafe { message_metadata_get_null_offset(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_builder(&self, status: &StatusWrapper) -> MetadataBuilder
+    fn get_builder(&self, status: &StatusWrapper) -> Result<MetadataBuilder>
     {
-        unsafe { return MetadataBuilder{ this: message_metadata_get_builder(self.get_this(), status.this) }; }
+        let result = unsafe { MetadataBuilder{ this: message_metadata_get_builder(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_message_length(&self, status: &StatusWrapper) -> UInt
+    fn get_message_length(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return message_metadata_get_message_length(self.get_this(), status.this); }
+        let result = unsafe { message_metadata_get_message_length(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -939,45 +1345,95 @@ impl_as_def!(MessageMetadata, IReferenceCounted, IMessageMetadata);
 
 pub trait IMetadataBuilder : IReferenceCounted
 {
-    fn set_type(&self, status: &StatusWrapper, index: UInt, typ: UInt)
+    fn set_type(&self, status: &StatusWrapper, index: UInt, typ: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_set_type(self.get_this(), status.this, index, typ); }
+        let result = unsafe { metadata_builder_set_type(self.get_this(), status.this, index, typ) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_sub_type(&self, status: &StatusWrapper, index: UInt, sub_type: Int)
+    fn set_sub_type(&self, status: &StatusWrapper, index: UInt, sub_type: Int) -> Result<()>
     {
-        unsafe { return metadata_builder_set_sub_type(self.get_this(), status.this, index, sub_type); }
+        let result = unsafe { metadata_builder_set_sub_type(self.get_this(), status.this, index, sub_type) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_length(&self, status: &StatusWrapper, index: UInt, length: UInt)
+    fn set_length(&self, status: &StatusWrapper, index: UInt, length: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_set_length(self.get_this(), status.this, index, length); }
+        let result = unsafe { metadata_builder_set_length(self.get_this(), status.this, index, length) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_char_set(&self, status: &StatusWrapper, index: UInt, char_set: UInt)
+    fn set_char_set(&self, status: &StatusWrapper, index: UInt, char_set: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_set_char_set(self.get_this(), status.this, index, char_set); }
+        let result = unsafe { metadata_builder_set_char_set(self.get_this(), status.this, index, char_set) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_scale(&self, status: &StatusWrapper, index: UInt, scale: Int)
+    fn set_scale(&self, status: &StatusWrapper, index: UInt, scale: Int) -> Result<()>
     {
-        unsafe { return metadata_builder_set_scale(self.get_this(), status.this, index, scale); }
+        let result = unsafe { metadata_builder_set_scale(self.get_this(), status.this, index, scale) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn truncate(&self, status: &StatusWrapper, count: UInt)
+    fn truncate(&self, status: &StatusWrapper, count: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_truncate(self.get_this(), status.this, count); }
+        let result = unsafe { metadata_builder_truncate(self.get_this(), status.this, count) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn move_name_to_index(&self, status: &StatusWrapper, name: CPtr<Char>, index: UInt)
+    fn move_name_to_index(&self, status: &StatusWrapper, name: CPtr<Char>, index: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_move_name_to_index(self.get_this(), status.this, name, index); }
+        let result = unsafe { metadata_builder_move_name_to_index(self.get_this(), status.this, name, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn remove(&self, status: &StatusWrapper, index: UInt)
+    fn remove(&self, status: &StatusWrapper, index: UInt) -> Result<()>
     {
-        unsafe { return metadata_builder_remove(self.get_this(), status.this, index); }
+        let result = unsafe { metadata_builder_remove(self.get_this(), status.this, index) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn add_field(&self, status: &StatusWrapper) -> UInt
+    fn add_field(&self, status: &StatusWrapper) -> Result<UInt>
     {
-        unsafe { return metadata_builder_add_field(self.get_this(), status.this); }
+        let result = unsafe { metadata_builder_add_field(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_metadata(&self, status: &StatusWrapper) -> MessageMetadata
+    fn get_metadata(&self, status: &StatusWrapper) -> Result<MessageMetadata>
     {
-        unsafe { return MessageMetadata{ this: metadata_builder_get_metadata(self.get_this(), status.this) }; }
+        let result = unsafe { MessageMetadata{ this: metadata_builder_get_metadata(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 
@@ -1006,49 +1462,104 @@ impl_as_def!(Request, IReferenceCounted, IRequest);
 
 pub trait IResultSet : IReferenceCounted
 {
-    fn fetch_next(&self, status: &StatusWrapper, message: Ptr<Void>) -> Int
+    fn fetch_next(&self, status: &StatusWrapper, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_next(self.get_this(), status.this, message); }
+        let result = unsafe { result_set_fetch_next(self.get_this(), status.this, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn fetch_prior(&self, status: &StatusWrapper, message: Ptr<Void>) -> Int
+    fn fetch_prior(&self, status: &StatusWrapper, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_prior(self.get_this(), status.this, message); }
+        let result = unsafe { result_set_fetch_prior(self.get_this(), status.this, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn fetch_first(&self, status: &StatusWrapper, message: Ptr<Void>) -> Int
+    fn fetch_first(&self, status: &StatusWrapper, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_first(self.get_this(), status.this, message); }
+        let result = unsafe { result_set_fetch_first(self.get_this(), status.this, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn fetch_last(&self, status: &StatusWrapper, message: Ptr<Void>) -> Int
+    fn fetch_last(&self, status: &StatusWrapper, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_last(self.get_this(), status.this, message); }
+        let result = unsafe { result_set_fetch_last(self.get_this(), status.this, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn fetch_absolute(&self, status: &StatusWrapper, position: Int, message: Ptr<Void>) -> Int
+    fn fetch_absolute(&self, status: &StatusWrapper, position: Int, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_absolute(self.get_this(), status.this, position, message); }
+        let result = unsafe { result_set_fetch_absolute(self.get_this(), status.this, position, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn fetch_relative(&self, status: &StatusWrapper, offset: Int, message: Ptr<Void>) -> Int
+    fn fetch_relative(&self, status: &StatusWrapper, offset: Int, message: Ptr<Void>) -> Result<Int>
     {
-        unsafe { return result_set_fetch_relative(self.get_this(), status.this, offset, message); }
+        let result = unsafe { result_set_fetch_relative(self.get_this(), status.this, offset, message) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn is_eof(&self, status: &StatusWrapper) -> FbBoolean
+    fn is_eof(&self, status: &StatusWrapper) -> Result<FbBoolean>
     {
-        unsafe { return result_set_is_eof(self.get_this(), status.this); }
+        let result = unsafe { result_set_is_eof(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn is_bof(&self, status: &StatusWrapper) -> FbBoolean
+    fn is_bof(&self, status: &StatusWrapper) -> Result<FbBoolean>
     {
-        unsafe { return result_set_is_bof(self.get_this(), status.this); }
+        let result = unsafe { result_set_is_bof(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn get_metadata(&self, status: &StatusWrapper) -> MessageMetadata
+    fn get_metadata(&self, status: &StatusWrapper) -> Result<MessageMetadata>
     {
-        unsafe { return MessageMetadata{ this: result_set_get_metadata(self.get_this(), status.this) }; }
+        let result = unsafe { MessageMetadata{ this: result_set_get_metadata(self.get_this(), status.this) } };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn close(&self, status: &StatusWrapper)
+    fn close(&self, status: &StatusWrapper) -> Result<()>
     {
-        unsafe { return result_set_close(self.get_this(), status.this); }
+        let result = unsafe { result_set_close(self.get_this(), status.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
-    fn set_delayed_output_format(&self, status: &StatusWrapper, format: &MessageMetadata)
+    fn set_delayed_output_format(&self, status: &StatusWrapper, format: &MessageMetadata) -> Result<()>
     {
-        unsafe { return result_set_set_delayed_output_format(self.get_this(), status.this, format.this); }
+        let result = unsafe { result_set_set_delayed_output_format(self.get_this(), status.this, format.this) };
+        if status.has_data() == 1
+        {
+            return Err(Error::from_sw(&status));
+        }
+        Ok(result)
     }
 }
 

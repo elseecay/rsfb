@@ -12,11 +12,11 @@ fn main()
 
     let bindings = bindgen::Builder::default()
         .header("/usr/include/ibase.h")// TODO: ?
-        .ignore_functions()
         .constified_enum("*")
         .prepend_enum_name(false)
         .layout_tests(false) // TODO: may be turn on
         .rustfmt_bindings(true)
+        .generate_comments(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
