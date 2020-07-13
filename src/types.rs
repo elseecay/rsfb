@@ -25,5 +25,8 @@ pub type IscULong = ib::ISC_ULONG;
 pub type GdsQuad = ib::GDS_QUAD_t;
 pub type IscQuad = GdsQuad;
 
+pub use crate::{Result, Error};
+pub type NoRes = Result<()>;
+
 pub use std::ptr::null_mut as null;
 pub use std::ptr::null as cnull;

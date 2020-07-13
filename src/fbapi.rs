@@ -201,7 +201,7 @@ extern "C"
     pub fn attachment_que_events(this: AttachmentPtr, status: StatusWrapperPtr, callback: EventCallbackPtr, length: UInt, events: CPtr<UChar>) -> EventsPtr;
     pub fn attachment_cancel_operation(this: AttachmentPtr, status: StatusWrapperPtr, option: Int);
     pub fn attachment_ping(this: AttachmentPtr, status: StatusWrapperPtr);
-    pub fn attachment_drop_database(this: AttachmentPtr, status: StatusWrapperPtr);
+    pub fn attachment_drop_database(this: AttachmentPtr, status: StatusWrapperPtr); // object destroyed
 
     // ITransaction
     pub fn transaction_get_info(this: TransactionPtr, status: StatusWrapperPtr, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>);
@@ -974,7 +974,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn drop_database(&self, status: &StatusWrapper) -> Result<()>
+    fn drop_database(self, status: &StatusWrapper) -> Result<()>
     {
         let result = unsafe { attachment_drop_database(self.get_this(), status.this) };
         if status.has_data() == 1
