@@ -1,7 +1,8 @@
+use super::util::share::*;
+
 pub mod ibase;
-pub use ibase as ib;
-use crate::types::*;
-use crate::{Error, Result};
+use ibase as ib;
+
 
 
 trait CxxClass : Sized
@@ -12,16 +13,31 @@ trait CxxClass : Sized
     fn set_state_destroyed(&mut self);
 }
 
-macro_rules! declare_cxx_class
+macro_rules! declare_cxx_class_pointers
 {
-    ($classname: ident, $ptrname: ident, $cptrname: ident) =>
+    ($ptrname: ident, $cptrname: ident) =>
     {
         pub type $ptrname = VoidPtr;
         pub type $cptrname = VoidCPtr;
+    };
+}
+
+macro_rules! declare_cxx_class_struct
+{
+    ($classname: ident, $($mname: ident, $tname: ident), *) =>
+    {
         pub struct $classname
         {
-            this: VoidPtr
+            this: VoidPtr,
+            $($mname: $tname,)*
         }
+    };
+}
+
+macro_rules! declare_cxx_class_implementation
+{
+    ($classname: ident) =>
+    {
         impl CxxClass for $classname
         {
             fn get_this(&self) -> VoidPtr
@@ -54,6 +70,16 @@ macro_rules! declare_cxx_class
     };
 }
 
+macro_rules! declare_cxx_class
+{
+    ($classname: ident, $ptrname: ident, $cptrname: ident $(,$mname: ident, $tname: ident)*) =>
+    {
+        declare_cxx_class_pointers!($ptrname, $cptrname);
+        declare_cxx_class_struct!($classname, $($mname, $tname), *);
+        declare_cxx_class_implementation!($classname);
+    };
+}
+
 macro_rules! impl_as_def
 {
     ($classname: ident, $($traitname: ident), +) =>
@@ -67,7 +93,7 @@ declare_cxx_class!(Disposable, DisposablePtr, DisposableCPtr);
 declare_cxx_class!(ReferenceCounted, ReferenceCountedPtr, ReferenceCountedCPtr);
 declare_cxx_class!(Master, MasterPtr, MasterCPtr);
 declare_cxx_class!(Status, StatusPtr, StatusCPtr);
-declare_cxx_class!(StatusWrapper, StatusWrapperPtr, StatusWrapperCPtr);
+declare_cxx_class!(StatusWrapper, StatusWrapperPtr, StatusWrapperCPtr, internal, Status);
 declare_cxx_class!(PluginBase, PluginBasePtr, PluginBaseCPtr);
 declare_cxx_class!(Provider, ProviderPtr, ProviderCPtr);
 declare_cxx_class!(Util, UtilPtr, UtilCPtr);
@@ -376,17 +402,18 @@ pub trait IStatus : IDisposable
 impl_as_def!(Status, IDisposable, IStatus);
 
 // TODO: rework
+// TODO: replace clone with own
 pub trait IStatusWrapper : IDeletable
 {
-    fn new(status: &Status) -> StatusWrapper
+    fn new(status: Status) -> StatusWrapper
     {
-        unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()) }; }
+        unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()), internal: status }; }
     }
     fn clear_exception(&self)
     {
         unsafe { return status_wrapper_clear_exception(self.get_this()); }
     }
-    fn dispose(&self) // disposes internal IStatus
+    fn dispose(&self) // disposes internal IStatus, TODO: remove (or remove Status destructor), cant set_state_destroyed on internal status
     {
         unsafe { return status_wrapper_dispose(self.get_this()); }
     }
@@ -445,6 +472,14 @@ impl IDeletable for StatusWrapper
     fn delete(&mut self)
     {
         unsafe { status_wrapper_delete(self.get_this()); }
+    }
+}
+
+impl StatusWrapper
+{
+    pub fn internal(&self) -> &Status
+    {
+        return &self.internal;
     }
 }
 
@@ -857,13 +892,14 @@ impl_as_def!(XpbBuilder, IDisposable, IXpbBuilder);
 
 pub trait IAttachment : IReferenceCounted
 {
-    fn detach(self, status: &StatusWrapper) -> Result<()>
+    fn detach(mut self, status: &StatusWrapper) -> Result<()>
     {
         unsafe { attachment_detach(self.get_this(), status.this); }
         if status.has_data() != 0
         {
             return Err(Error::from_sw(&status));
         }
+        self.set_state_destroyed();
         return Ok(());
     }
     fn prepare(&self, status: &StatusWrapper, tra: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, flags: UInt) -> Result<Statement>
@@ -974,13 +1010,14 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn drop_database(self, status: &StatusWrapper) -> Result<()>
+    fn drop_database(mut self, status: &StatusWrapper) -> Result<()>
     {
         let result = unsafe { attachment_drop_database(self.get_this(), status.this) };
         if status.has_data() == 1
         {
             return Err(Error::from_sw(&status));
         }
+        self.set_state_destroyed();
         Ok(result)
     }
 }
@@ -1007,13 +1044,14 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn commit(self, status: &StatusWrapper) -> Result<()>
+    fn commit(mut self, status: &StatusWrapper) -> Result<()>
     {
         let result = unsafe { transaction_commit(self.get_this(), status.this) };
         if status.has_data() == 1
         {
             return Err(Error::from_sw(&status));
         }
+        self.set_state_destroyed();
         Ok(result)
     }
     fn commit_retaining(&self, status: &StatusWrapper) -> Result<()>

@@ -24,6 +24,6 @@ fn main()
     // TODO: no warnings for generated file
     let out_path = PathBuf::from("./src");
     bindings
-        .write_to_file(out_path.join("fbapi/ibase.rs"))
+        .write_to_file(out_path.join("detail/fbapi/ibase.rs"))
         .expect("Couldn't write bindings!");
 }

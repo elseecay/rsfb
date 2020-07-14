@@ -1,24 +1,28 @@
-use crate::fbapi::*;
-use crate::fbapi::ib;
-use crate::types::*;
-use std::ffi::CString;
+use crate::detail::util::share::*;
+
+use crate::detail::fbapi::*;
+use crate::detail::fbapi as fb;
+use crate::detail::fbapi::ibase as ib;
+
+use crate::detail::util::*;
+
 
 
 type Tag = UChar;
 
-trait InsertTag
+pub trait InsertTag
 {
     fn insert_tag(&mut self, t: Tag) -> NoRes;
 }
-trait InsertInt
+pub trait InsertInt
 {
     fn insert_int(&mut self, t: Tag, v: Int) -> NoRes;
 }
-trait InsertLong
+pub trait InsertLong
 {
     fn insert_long(&mut self, t: Tag, v: Long) -> NoRes;
 }
-trait InsertStr
+pub trait InsertStr
 {
     fn insert_str<S: Into<Vec<u8>>>(&mut self, t: Tag, v: S) -> NoRes;
 }
@@ -67,46 +71,45 @@ macro_rules! impl_xpb_param_builder
         pub struct $name
         {
             builder: XpbBuilder,
-            s: Status,
-            sw: StatusWrapper
+            s: StatusWrapper
         }
         impl InsertTag for $name
         {
             fn insert_tag(&mut self, t: Tag) -> NoRes
             {
-                self.builder.insert_tag(&self.sw, t)
+                self.builder.insert_tag(&self.s, t)
             }
         }
         impl InsertInt for $name
         {
             fn insert_int(&mut self, t: Tag, v: Int) -> NoRes
             {
-                self.builder.insert_int(&self.sw, t, v)
+                self.builder.insert_int(&self.s, t, v)
             }
         }
         impl InsertLong for $name
         {
             fn insert_long(&mut self, t: Tag, v: Long) -> NoRes
             {
-                self.builder.insert_big_int(&self.sw, t, v)
+                self.builder.insert_big_int(&self.s, t, v)
             }
         }
         impl InsertStr for $name
         {
             fn insert_str<S: Into<Vec<u8>>>(&mut self, t: Tag, v: S) -> NoRes
             {
-                self.builder.insert_string(&self.sw, t, CString::new(v).unwrap().as_ptr())
+                self.builder.insert_string(&self.s, t, CString::new(v).unwrap().as_ptr())
             }
         }
         impl XpbParamsBuilder for $name
         {
             fn get_buffer(&self) -> Result<CPtr<UChar>>
             {
-                self.builder.get_buffer(&self.sw)
+                self.builder.get_buffer(&self.s)
             }
             fn get_buffer_length(&self) -> Result<UInt>
             {
-                self.builder.get_buffer_length(&self.sw)
+                self.builder.get_buffer_length(&self.s)
             }
         }
         impl $name
@@ -114,10 +117,9 @@ macro_rules! impl_xpb_param_builder
             pub fn new() -> Result<$name>
             {
                 let m = Master::get();
-                let s = m.get_status();
-                let sw = StatusWrapper::new(&s);
-                let builder = m.get_util_interface().get_xpb_builder(&sw, XpbBuilder::$kind, null(), 0)?;
-                return Ok($name{ builder, s, sw });
+                let s = create_status_wrapper();
+                let builder = m.get_util_interface().get_xpb_builder(&s, XpbBuilder::$kind, null(), 0)?;
+                return Ok($name{ builder, s });
             }
         }
     }
@@ -140,7 +142,7 @@ impl_xpb_param_builder!(Connect, DPB);
 impl_param!(User, Connect);
 impl_param!(Password, Connect);
 
-impl_xpb_param_builder!(StartTransaction, TPB);
+impl_xpb_param_builder!(Transaction, TPB);
 
 
 

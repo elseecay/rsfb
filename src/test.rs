@@ -1,24 +1,10 @@
-use crate::fbapi::*;
-use std::str;
-use std::ffi::CStr;
-use std::ptr::{null as nullptr, slice_from_raw_parts};
-use std::process::exit;
-use crate::types::*;
-use crate::{Error, Result};
-use std::ffi::CString;
-use crate as lib;
-use crate::pbuilder as pb;
-use pb::{XpbParamsBuilder};
-use pb::params::*;
+use crate::detail::util::share::*;
 
+use crate::*;
 
-macro_rules! endtest
-{
-    () =>
-    {
-        0
-    }
-}
+use crate::component::pbuilder::*;
+use crate::component::pbuilder as pb;
+
 
 
 #[test]
@@ -28,7 +14,7 @@ fn example_create_database()
     b.set_user("user");
     b.set_password("password");
     b.set_page_size(4096);
-    lib::Connection::create_database("666.fdb", b).unwrap();
+    Connection::create_database("666.fdb", b).unwrap();
 }
 
 #[test]
@@ -37,7 +23,7 @@ fn example_attach_database()
     let mut b = pb::Connect::new().unwrap();
     b.set_user("user");
     b.set_password("password");
-    let con = lib::Connection::connect("665.fdb", b).unwrap();
+    let con = Connection::connect("665.fdb", b).unwrap();
 }
 
 #[test]

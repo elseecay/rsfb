@@ -1,4 +1,4 @@
-use crate::fbapi::ibase as ib;
+use crate::detail::fbapi::ibase as ib;
 
 pub type Ptr<T> = *mut T;
 pub type CPtr<T> = *const T;
@@ -25,8 +25,5 @@ pub type IscULong = ib::ISC_ULONG;
 pub type GdsQuad = ib::GDS_QUAD_t;
 pub type IscQuad = GdsQuad;
 
-pub use crate::{Result, Error};
-pub type NoRes = Result<()>;
+pub use crate::component::error::{Error, Result, NoRes};
 
-pub use std::ptr::null_mut as null;
-pub use std::ptr::null as cnull;
