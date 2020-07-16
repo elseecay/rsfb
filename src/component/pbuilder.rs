@@ -36,32 +36,86 @@ pub mod params
 {
     use super::*;
 
-    // TODO: declaring macro
-    pub trait PageSize : InsertInt
+    macro_rules! declare_param_tag
     {
-        fn set_page_size(&mut self, v: Int) -> NoRes
+        ($name: ident, $tag: ident, $method: ident) =>
         {
-            self.insert_int(ib::isc_dpb_page_size as Tag, v)
-        }
+            pub trait $name : InsertTag
+            {
+                fn $method(&mut self) -> NoRes
+                {
+                    self.insert_tag(ib::$tag as Tag)
+                }
+            }
+        };
     }
-    pub trait User : InsertStr
+    macro_rules! declare_param_int
     {
-        fn set_user<S: Into<Vec<u8>>>(&mut self, v: S) -> NoRes
+        ($name: ident, $tag: ident, $method: ident) =>
         {
-            self.insert_str(ib::isc_dpb_user_name as Tag, v)
-        }
+            pub trait $name : InsertInt
+            {
+                fn $method(&mut self, v: Int) -> NoRes
+                {
+                    self.insert_int(ib::$tag as Tag, v)
+                }
+            }
+        };
     }
-    pub trait Password : InsertStr
+    macro_rules! declare_param_long
     {
-        fn set_password<S: Into<Vec<u8>>>(&mut self, v: S) -> NoRes
+        ($name: ident, $tag: ident, $method: ident) =>
         {
-            self.insert_str(ib::isc_dpb_password as Tag, v)
-        }
+            pub trait $name : InsertLong
+            {
+                fn $method(&mut self, v: Long) -> NoRes
+                {
+                    self.insert_long(ib::$tag as Tag, v)
+                }
+            }
+        };
     }
-    // tpb->insertTag(&status, isc_tpb_read_committed);
-    // tpb->insertTag(&status, isc_tpb_no_rec_version);
-    // tpb->insertTag(&status, isc_tpb_wait);
-    // tpb->insertTag(&status, isc_tpb_read)
+    macro_rules! declare_param_str
+    {
+        ($name: ident, $tag: ident, $method: ident) =>
+        {
+            pub trait $name : InsertStr
+            {
+                fn $method<S: Into<Vec<u8>>>(&mut self, v: S) -> NoRes
+                {
+                    self.insert_str(ib::$tag as Tag, v)
+                }
+            }
+        };
+    }
+
+    declare_param_tag!(Read, isc_tpb_read, read);
+    declare_param_tag!(Write, isc_tpb_write, write);
+    declare_param_tag!(ReadCommitted, isc_tpb_read_committed, read_committed);
+    declare_param_tag!(AutoCommit, isc_tpb_autocommit, auto_commit);
+    // #define isc_tpb_version1                  1
+    // #define isc_tpb_version3                  3
+    // #define isc_tpb_consistency               1
+    // #define isc_tpb_concurrency               2
+    // #define isc_tpb_shared                    3
+    // #define isc_tpb_protected                 4
+    // #define isc_tpb_exclusive                 5
+    // #define isc_tpb_wait                      6
+    // #define isc_tpb_nowait                    7
+    // #define isc_tpb_lock_read                 10
+    // #define isc_tpb_lock_write                11
+    // #define isc_tpb_verb_time                 12
+    // #define isc_tpb_commit_time               13
+    // #define isc_tpb_ignore_limbo              14
+    // #define isc_tpb_rec_version               17
+    // #define isc_tpb_no_rec_version            18
+    // #define isc_tpb_restart_requests          19
+    // #define isc_tpb_no_auto_undo              20
+    // #define isc_tpb_lock_timeout              21
+
+    declare_param_int!(PageSize, isc_dpb_page_size, page_size);
+    declare_param_str!(User, isc_dpb_user_name, user);
+    declare_param_str!(Password, isc_dpb_password, password);
 }
 
 macro_rules! impl_xpb_param_builder
@@ -143,6 +197,12 @@ impl_param!(User, Connect);
 impl_param!(Password, Connect);
 
 impl_xpb_param_builder!(Transaction, TPB);
+impl_param!(Read, Transaction);
+impl_param!(Write, Transaction);
+impl_param!(ReadCommitted, Transaction);
+impl_param!(AutoCommit, Transaction);
+
+
 
 
 

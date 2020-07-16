@@ -2,7 +2,7 @@ use super::util::share::*;
 
 pub mod ibase;
 use ibase as ib;
-
+use std::io::Write;
 
 
 trait CxxClass : Sized
@@ -550,7 +550,7 @@ impl_as_def!(Master, IVersioned, IMaster);
 
 pub trait IUtil : IVersioned
 {
-    fn get_fb_version(&self, status: &StatusWrapper, att: &Attachment, callback: &VersionCallback) -> Result<()>
+    fn get_fb_version(&self, status: &StatusWrapper, att: &Attachment, callback: &VersionCallback) -> NoRes
     {
         let result = unsafe { util_get_fb_version(self.get_this(), status.this, att.this, callback.this) };
         if status.has_data() == 1
@@ -559,7 +559,7 @@ pub trait IUtil : IVersioned
         }
         Ok(result)
     }
-    fn load_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> Result<()>
+    fn load_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> NoRes
     {
         let result = unsafe { util_load_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt) };
         if status.has_data() == 1
@@ -568,7 +568,7 @@ pub trait IUtil : IVersioned
         }
         Ok(result)
     }
-    fn dump_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> Result<()>
+    fn dump_blob(&self, status: &StatusWrapper, blob_id: Ptr<IscQuad>, att: &Attachment, tra: &Transaction, file: CPtr<Char>, txt: FbBoolean) -> NoRes
     {
         let result = unsafe { util_dump_blob(self.get_this(), status.this, blob_id, att.this, tra.this, file, txt) };
         if status.has_data() == 1
@@ -577,7 +577,7 @@ pub trait IUtil : IVersioned
         }
         Ok(result)
     }
-    fn get_perf_counters(&self, status: &StatusWrapper, att: &Attachment, counters_set: CPtr<Char>, counters: Ptr<IscInt64>) -> Result<()>
+    fn get_perf_counters(&self, status: &StatusWrapper, att: &Attachment, counters_set: CPtr<Char>, counters: Ptr<IscInt64>) -> NoRes
     {
         let result = unsafe { util_get_perf_counters(self.get_this(), status.this, att.this, counters_set, counters) };
         if status.has_data() == 1
@@ -650,7 +650,7 @@ impl_as_def!(PluginBase, IReferenceCounted, IPluginBase);
 
 pub trait IProvider : IPluginBase
 {
-    fn shutdown(&self, status: &StatusWrapper, timeout: UInt, reason: Int) -> Result<()>
+    fn shutdown(&self, status: &StatusWrapper, timeout: UInt, reason: Int) -> NoRes
     {
         let result = unsafe { provider_shutdown(self.get_this(), status.this, timeout, reason) };
         if status.has_data() == 1
@@ -686,7 +686,7 @@ pub trait IProvider : IPluginBase
         }
         Ok(result)
     }
-    fn set_db_crypt_callback(&self, status: &StatusWrapper, crypt_callback: &CryptKeyCallback) -> Result<()>
+    fn set_db_crypt_callback(&self, status: &StatusWrapper, crypt_callback: &CryptKeyCallback) -> NoRes
     {
         let result = unsafe { provider_set_db_crypt_callback(self.get_this(), status.this, crypt_callback.this) };
         if status.has_data() == 1
@@ -706,7 +706,7 @@ pub trait IXpbBuilder : IDisposable
     const SPB_START: UInt = 3;
     const TPB: UInt = 4;
 
-    fn clear(&self, status: &StatusWrapper) -> Result<()>
+    fn clear(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { xpb_builder_clear(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -715,7 +715,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn remove_current(&self, status: &StatusWrapper) -> Result<()>
+    fn remove_current(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { xpb_builder_remove_current(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -724,7 +724,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn insert_int(&self, status: &StatusWrapper, tag: UChar, value: Int) -> Result<()>
+    fn insert_int(&self, status: &StatusWrapper, tag: UChar, value: Int) -> NoRes
     {
         let result = unsafe { xpb_builder_insert_int(self.get_this(), status.this, tag, value) };
         if status.has_data() == 1
@@ -733,7 +733,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn insert_big_int(&self, status: &StatusWrapper, tag: UChar, value: IscInt64) -> Result<()>
+    fn insert_big_int(&self, status: &StatusWrapper, tag: UChar, value: IscInt64) -> NoRes
     {
         let result = unsafe { xpb_builder_insert_big_int(self.get_this(), status.this, tag, value) };
         if status.has_data() == 1
@@ -742,7 +742,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn insert_bytes(&self, status: &StatusWrapper, tag: UChar, bytes: CPtr<Void>, length: UInt) -> Result<()>
+    fn insert_bytes(&self, status: &StatusWrapper, tag: UChar, bytes: CPtr<Void>, length: UInt) -> NoRes
     {
         let result = unsafe { xpb_builder_insert_bytes(self.get_this(), status.this, tag, bytes, length) };
         if status.has_data() == 1
@@ -751,7 +751,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn insert_string(&self, status: &StatusWrapper, tag: UChar, str: CPtr<Char>) -> Result<()>
+    fn insert_string(&self, status: &StatusWrapper, tag: UChar, str: CPtr<Char>) -> NoRes
     {
         let result = unsafe { xpb_builder_insert_string(self.get_this(), status.this, tag, str) };
         if status.has_data() == 1
@@ -760,7 +760,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn insert_tag(&self, status: &StatusWrapper, tag: UChar) -> Result<()>
+    fn insert_tag(&self, status: &StatusWrapper, tag: UChar) -> NoRes
     {
         let result = unsafe { xpb_builder_insert_tag(self.get_this(), status.this, tag) };
         if status.has_data() == 1
@@ -778,7 +778,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn move_next(&self, status: &StatusWrapper) -> Result<()>
+    fn move_next(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { xpb_builder_move_next(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -787,7 +787,7 @@ pub trait IXpbBuilder : IDisposable
         }
         Ok(result)
     }
-    fn rewind(&self, status: &StatusWrapper) -> Result<()>
+    fn rewind(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { xpb_builder_rewind(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -892,7 +892,7 @@ impl_as_def!(XpbBuilder, IDisposable, IXpbBuilder);
 
 pub trait IAttachment : IReferenceCounted
 {
-    fn detach(mut self, status: &StatusWrapper) -> Result<()>
+    fn detach(mut self, status: &StatusWrapper) -> NoRes
     {
         unsafe { attachment_detach(self.get_this(), status.this); }
         if status.has_data() != 0
@@ -929,7 +929,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes
     {
         let result = unsafe { attachment_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
         if status.has_data() == 1
@@ -956,7 +956,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn transact_request(&self, status: &StatusWrapper, transaction: &Transaction, blr_length: UInt, blr: CPtr<UChar>, in_msg_length: UInt, in_msg: CPtr<UChar>, out_msg_length: UInt, out_msg: Ptr<UChar>) -> Result<()>
+    fn transact_request(&self, status: &StatusWrapper, transaction: &Transaction, blr_length: UInt, blr: CPtr<UChar>, in_msg_length: UInt, in_msg: CPtr<UChar>, out_msg_length: UInt, out_msg: Ptr<UChar>) -> NoRes
     {
         let result = unsafe { attachment_transact_request(self.get_this(), status.this, transaction.this, blr_length, blr, in_msg_length, in_msg, out_msg_length, out_msg) };
         if status.has_data() == 1
@@ -965,7 +965,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute_dyn(&self, status: &StatusWrapper, transaction: &Transaction, length: UInt, dn: CPtr<UChar>) -> Result<()>
+    fn execute_dyn(&self, status: &StatusWrapper, transaction: &Transaction, length: UInt, dn: CPtr<UChar>) -> NoRes
     {
         let result = unsafe { attachment_execute_dyn(self.get_this(), status.this, transaction.this, length, dn) };
         if status.has_data() == 1
@@ -992,7 +992,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn cancel_operation(&self, status: &StatusWrapper, option: Int) -> Result<()>
+    fn cancel_operation(&self, status: &StatusWrapper, option: Int) -> NoRes
     {
         let result = unsafe { attachment_cancel_operation(self.get_this(), status.this, option) };
         if status.has_data() == 1
@@ -1001,7 +1001,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn ping(&self, status: &StatusWrapper) -> Result<()>
+    fn ping(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { attachment_ping(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1010,7 +1010,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn drop_database(mut self, status: &StatusWrapper) -> Result<()>
+    fn drop_database(mut self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { attachment_drop_database(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1026,7 +1026,7 @@ impl_as_def!(Attachment, IReferenceCounted, IAttachment);
 
 pub trait ITransaction : IReferenceCounted
 {
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes
     {
         let result = unsafe { transaction_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
         if status.has_data() == 1
@@ -1035,7 +1035,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>) -> Result<()>
+    fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>) -> NoRes
     {
         let result = unsafe { transaction_prepare(self.get_this(), status.this, msg_length, message) };
         if status.has_data() == 1
@@ -1044,7 +1044,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn commit(mut self, status: &StatusWrapper) -> Result<()>
+    fn commit(mut self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_commit(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1054,7 +1054,7 @@ pub trait ITransaction : IReferenceCounted
         self.set_state_destroyed();
         Ok(result)
     }
-    fn commit_retaining(&self, status: &StatusWrapper) -> Result<()>
+    fn commit_retaining(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_commit_retaining(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1063,7 +1063,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn rollback(&self, status: &StatusWrapper) -> Result<()>
+    fn rollback(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_rollback(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1072,7 +1072,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn rollback_retaining(&self, status: &StatusWrapper) -> Result<()>
+    fn rollback_retaining(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_rollback_retaining(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1081,7 +1081,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn disconnect(&self, status: &StatusWrapper) -> Result<()>
+    fn disconnect(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_disconnect(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1137,7 +1137,7 @@ pub trait IStatement : IReferenceCounted
     const FLAG_REPEAT_EXECUTE: UInt = 2;
     const CURSOR_TYPE_SCROLLABLE: UInt = 1;
 
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> Result<()>
+    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes
     {
         let result = unsafe { statement_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
         if status.has_data() == 1
@@ -1191,14 +1191,15 @@ pub trait IStatement : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<Transaction>
+    fn execute<'a>(&self, status: &StatusWrapper, transaction: &'a Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<&'a Transaction>
     {
-        let result = unsafe { Transaction{ this: statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) } };
+        // TODO: fix double free problem with Result<&Transaction> instead of Result<Transaction> in all functions like this
+        unsafe { statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };
         if status.has_data() == 1
         {
             return Err(Error::from_sw(&status));
         }
-        Ok(result)
+        return Ok(transaction);
     }
     fn open_cursor(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, flags: UInt) -> Result<ResultSet>
     {
@@ -1209,7 +1210,7 @@ pub trait IStatement : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_cursor_name(&self, status: &StatusWrapper, name: CPtr<Char>) -> Result<()>
+    fn set_cursor_name(&self, status: &StatusWrapper, name: CPtr<Char>) -> NoRes
     {
         let result = unsafe { statement_set_cursor_name(self.get_this(), status.this, name) };
         if status.has_data() == 1
@@ -1218,7 +1219,7 @@ pub trait IStatement : IReferenceCounted
         }
         Ok(result)
     }
-    fn free(&self, status: &StatusWrapper) -> Result<()>
+    fn free(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { statement_free(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1383,7 +1384,7 @@ impl_as_def!(MessageMetadata, IReferenceCounted, IMessageMetadata);
 
 pub trait IMetadataBuilder : IReferenceCounted
 {
-    fn set_type(&self, status: &StatusWrapper, index: UInt, typ: UInt) -> Result<()>
+    fn set_type(&self, status: &StatusWrapper, index: UInt, typ: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_set_type(self.get_this(), status.this, index, typ) };
         if status.has_data() == 1
@@ -1392,7 +1393,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_sub_type(&self, status: &StatusWrapper, index: UInt, sub_type: Int) -> Result<()>
+    fn set_sub_type(&self, status: &StatusWrapper, index: UInt, sub_type: Int) -> NoRes
     {
         let result = unsafe { metadata_builder_set_sub_type(self.get_this(), status.this, index, sub_type) };
         if status.has_data() == 1
@@ -1401,7 +1402,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_length(&self, status: &StatusWrapper, index: UInt, length: UInt) -> Result<()>
+    fn set_length(&self, status: &StatusWrapper, index: UInt, length: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_set_length(self.get_this(), status.this, index, length) };
         if status.has_data() == 1
@@ -1410,7 +1411,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_char_set(&self, status: &StatusWrapper, index: UInt, char_set: UInt) -> Result<()>
+    fn set_char_set(&self, status: &StatusWrapper, index: UInt, char_set: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_set_char_set(self.get_this(), status.this, index, char_set) };
         if status.has_data() == 1
@@ -1419,7 +1420,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_scale(&self, status: &StatusWrapper, index: UInt, scale: Int) -> Result<()>
+    fn set_scale(&self, status: &StatusWrapper, index: UInt, scale: Int) -> NoRes
     {
         let result = unsafe { metadata_builder_set_scale(self.get_this(), status.this, index, scale) };
         if status.has_data() == 1
@@ -1428,7 +1429,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn truncate(&self, status: &StatusWrapper, count: UInt) -> Result<()>
+    fn truncate(&self, status: &StatusWrapper, count: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_truncate(self.get_this(), status.this, count) };
         if status.has_data() == 1
@@ -1437,7 +1438,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn move_name_to_index(&self, status: &StatusWrapper, name: CPtr<Char>, index: UInt) -> Result<()>
+    fn move_name_to_index(&self, status: &StatusWrapper, name: CPtr<Char>, index: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_move_name_to_index(self.get_this(), status.this, name, index) };
         if status.has_data() == 1
@@ -1446,7 +1447,7 @@ pub trait IMetadataBuilder : IReferenceCounted
         }
         Ok(result)
     }
-    fn remove(&self, status: &StatusWrapper, index: UInt) -> Result<()>
+    fn remove(&self, status: &StatusWrapper, index: UInt) -> NoRes
     {
         let result = unsafe { metadata_builder_remove(self.get_this(), status.this, index) };
         if status.has_data() == 1
@@ -1581,7 +1582,7 @@ pub trait IResultSet : IReferenceCounted
         }
         Ok(result)
     }
-    fn close(&self, status: &StatusWrapper) -> Result<()>
+    fn close(&self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { result_set_close(self.get_this(), status.this) };
         if status.has_data() == 1
@@ -1590,7 +1591,7 @@ pub trait IResultSet : IReferenceCounted
         }
         Ok(result)
     }
-    fn set_delayed_output_format(&self, status: &StatusWrapper, format: &MessageMetadata) -> Result<()>
+    fn set_delayed_output_format(&self, status: &StatusWrapper, format: &MessageMetadata) -> NoRes
     {
         let result = unsafe { result_set_set_delayed_output_format(self.get_this(), status.this, format.this) };
         if status.has_data() == 1
