@@ -18,137 +18,154 @@ use crate::detail::fbapi::ibase as ib;
 use crate::component::error::ApiError;
 use std::mem::size_of;
 use std::ptr::slice_from_raw_parts;
-use std::any::type_name;
+
 
 
 pub type SqlTypeId = u32;
 
-pub trait SqlType : Sized
+pub trait SqlGetTypeId
 {
-    const TYPEID: SqlTypeId;
+    fn typeid(&self) -> SqlTypeId;
+}
 
-    fn from_buffer_nocheck(ptr: *const u8) -> Result<Self>;
-    fn to_buffer_nocheck(&self, ptr: *mut u8) -> NoRes;
-
-    fn from_buffer(ptr: *const u8, sqltype: SqlTypeId) -> Result<Self>
+macro_rules! impl_get_type_id
+{
+    ($name: ty) =>
     {
-        Self::check_typeid(sqltype);
-        Self::from_buffer_nocheck(ptr)
-    }
-    fn to_buffer(&self, ptr: *mut u8, sqltype: SqlTypeId) -> NoRes
-    {
-        Self::check_typeid(sqltype);
-        self.to_buffer_nocheck(ptr)
-    }
-    fn check_typeid(sqltype: SqlTypeId)
-    {
-        if Self::TYPEID != sqltype
+        impl SqlGetTypeId for $name
         {
-            panic!("Invalid SQL type {}, expected with typeid = {}", type_name::<Self>(), Self::TYPEID); // TODO: type name by type id
-        }
-    }
-}
-
-pub struct Varchar
-{
-    value: String
-}
-
-impl Varchar
-{
-    pub fn new(value: String) -> Varchar
-    {
-        return Varchar{ value };
-    }
-    pub fn value(&self) -> &str
-    {
-        return self.value.as_str();
-    }
-}
-
-impl SqlType for Varchar
-{
-    const TYPEID: SqlTypeId = ib::SQL_VARYING;
-
-    fn from_buffer_nocheck(ptr: *const u8) -> Result<Self>
-    {
-        unsafe
-        {
-            let vclen = from_raw_memory::<IscUShort>(ptr);
-            let ptr = ptr.offset(size_of::<IscUShort>() as isize);
-            let slc = slice_from_raw_parts(ptr, vclen as usize).as_ref().unwrap();
-            let bytes = Vec::from(slc);
-            let res = String::from_utf8(bytes);
-            match res
+            fn typeid(&self) -> SqlTypeId
             {
-                Err(e) => Err(Error::from_str("Invalid UTF-8 string inside of buffer")),
-                Ok(s) => Ok(Varchar::new(s))
+                <Self as SqlOutput>::TYPEID
             }
         }
     }
-    fn to_buffer_nocheck(&self, ptr: *mut u8) -> NoRes
+}
+
+// TODO: input of NULL
+pub trait SqlInput : SqlGetTypeId
+{
+    fn input(&self, dst: *mut u8) -> NoRes;
+}
+
+pub trait SqlOutput where Self: Sized
+{
+    const TYPEID: SqlTypeId;
+    fn output(src: *const u8) -> Result<Self>;
+}
+
+// Varchar
+impl SqlInput for Vec<u8>
+{
+    fn input(&self, dst: *mut u8) -> NoRes
     {
-        // TODO: put length
-        let bytes = self.value.as_bytes();
-        unsafe
-        {
-            libc::memcpy(ptr as VoidPtr, bytes.as_ptr() as VoidCPtr, bytes.len());
-            *ptr.offset(bytes.len() as isize) = 0;
-        }
+        let bytes = self.as_slice();
+        to_raw_memory(dst, bytes.len() as IscUShort);
+        let dst = unsafe { dst.offset(size_of::<IscUShort>() as isize) };
+        unsafe { libc::memcpy(dst as VoidPtr, bytes.as_ptr() as VoidCPtr, bytes.len()) };
+        // no needed *ptr.offset(bytes.len() as isize) = 0;
         return Ok(());
     }
 }
 
-macro_rules! impl_simple_from_to
+impl SqlOutput for Vec<u8>
 {
-    () =>
+    const TYPEID: SqlTypeId = ib::SQL_VARYING;
+
+    fn output(src: *const u8) -> Result<Self>
     {
-        fn from_buffer_nocheck(ptr: *const u8) -> Result<Self>
-        {
-            Ok(Self{ value: from_raw_memory(ptr) })
-        }
-        fn to_buffer_nocheck(&self, ptr: *mut u8) -> NoRes
-        {
-            to_raw_memory(ptr, self.value);
-            Ok(())
-        }
+        let vclen = from_raw_memory::<IscUShort>(src);
+        let src = unsafe { src.offset(size_of::<IscUShort>() as isize) };
+        let slc = unsafe { slice_from_raw_parts(src, vclen as usize).as_ref().unwrap() };
+        return Ok(Vec::from(slc));
     }
 }
+
+impl_get_type_id!(Vec<u8>);
+
+
 
 macro_rules! impl_simple_type
 {
-    ($name: ident, $internal:ident, $id: ident) =>
+    ($name: ty, $id: expr) =>
     {
-        pub struct $name
+        impl_get_type_id!($name);
+        impl SqlOutput for $name
         {
-            value: types::$internal
-        }
-        impl $name
-        {
-            pub fn new(value: types::$internal) -> $name
-            {
-                return $name{ value };
-            }
-            pub fn value(&self) -> types::$internal
-            {
-                return self.value;
-            }
-        }
-        impl SqlType for $name
-        {
-            const TYPEID: SqlTypeId = ib::$id;
+            const TYPEID: SqlTypeId = $id;
 
-            impl_simple_from_to!();
+            fn output(src: *const u8) -> Result<Self>
+            {
+                Ok(from_raw_memory(src))
+            }
+        }
+        impl SqlInput for $name
+        {
+            fn input(&self, dst: *mut u8) -> NoRes
+            {
+                to_raw_memory(dst, *self);
+                Ok(())
+            }
         }
     }
 }
 
-impl_simple_type!(Short, IscShort, SQL_SHORT);
-impl_simple_type!(Long, IscLong, SQL_LONG);
-impl_simple_type!(Int64, IscInt64, SQL_INT64);
-impl_simple_type!(Float, IscFloat, SQL_FLOAT);
-impl_simple_type!(Double, IscDouble, SQL_DOUBLE);
+impl_simple_type!(i16, ib::SQL_SHORT);  // SMALLINT
+impl_simple_type!(i32, ib::SQL_LONG);   // INTEGER
+impl_simple_type!(i64, ib::SQL_INT64);  // BIGINT
+impl_simple_type!(f32, ib::SQL_FLOAT);  // FLOAT
+impl_simple_type!(f64, ib::SQL_DOUBLE); // DOUBLE PRECISION
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// pub struct InputParamBuilder
+// {
+//     params: Vec<Box<dyn SqlInput>>
+// }
+//
+// impl InputParamBuilder
+// {
+//     pub fn new() -> InputParamBuilder
+//     {
+//         InputParamBuilder{ params: Vec::new() }
+//     }
+//     pub fn push<T: SqlInput + 'static>(&mut self, value: T)
+//     {
+//         self.params.push(Box::new(value));
+//     }
+//     pub fn len(&self) -> usize
+//     {
+//         return self.params.len();
+//     }
+//     pub fn
+// }
+
 
 // TODO: blobs
-// TODO: charset?
+// TODO: varchar with charset
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

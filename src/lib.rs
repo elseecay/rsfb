@@ -51,27 +51,32 @@ pub struct Rows<'a, 'b>
     sw: fb::StatusWrapper,
     rs: fb::ResultSet,
     field_info: Vec<FieldInfo>,
-    message: Vec<u8>,
+    input_message: Vec<u8>,
+    output_message: Vec<u8>,
 }
 
 impl Rows<'_, '_>
 {
     fn fetch_next(&mut self) -> Result<i32> // TODO: return something other
     {
-        self.rs.fetch_next(&self.sw, self.message.as_mut_ptr() as Ptr<Void>)
+        self.rs.fetch_next(&self.sw, self.output_message.as_mut_ptr() as Ptr<Void>)
     }
-    fn get<T: SqlType>(&self, index: usize) -> Result<Option<T>> // TODO: something without .unwrap().unwrap().value()
+    fn get<T: SqlOutput>(&self, index: usize) -> Result<Option<T>> // TODO: something without .unwrap().unwrap()
     {
         let field_info = &self.field_info[index];
+        if field_info.sqltype != T::TYPEID
+        {
+            panic!("Invalid SQL type {}, expected with typeid = {}", type_name::<T>(), field_info.sqltype); // TODO: type name by type id
+        }
         unsafe
         {
-            if *(self.message.as_ptr().offset(field_info.null_offset as isize) as CPtr<IscShort>) == ib::SQL_NULL as IscShort
+            if *(self.output_message.as_ptr().offset(field_info.null_offset as isize) as CPtr<IscShort>) == ib::SQL_NULL as IscShort
             {
                 return Ok(None);
             }
         }
-        let ptr = unsafe { self.message.as_ptr().offset(field_info.offset) };
-        return Ok(Some(T::from_buffer(ptr, field_info.sqltype)?));
+        let ptr = unsafe { self.output_message.as_ptr().offset(field_info.offset) };
+        return Ok(Some(T::output(ptr)?));
     }
 }
 
@@ -98,12 +103,13 @@ impl Transaction<'_>
         stmt.s.execute(&sw, &self.t, &stmt.imd, null(), &stmt.omd, null())?;
         return Ok(stmt.s.get_affected_records(&sw)?);
     }
-    pub fn execute_prepared_rows(&self, stmt: &Statement) -> Result<Rows>
+    pub fn execute_prepared_rows(&self, stmt: &Statement, params: &[&dyn SqlInput]) -> Result<Rows>
     {
         let sw = create_status_wrapper();
+        let mut input_message = self.get_input_buffer(&sw, &stmt.imd, params)?;
         let cols = stmt.omd.get_count(&sw)?;
-        let message_length = stmt.omd.get_message_length(&sw)?;
-        let message = Vec::<u8>::with_capacity(message_length as usize);
+        let output_message_length = stmt.omd.get_message_length(&sw)?;
+        let output_message = Vec::<u8>::with_capacity(output_message_length as usize);
         let mut field_info = Vec::<FieldInfo>::with_capacity(cols as usize);
         for i in 0..cols
         {
@@ -113,8 +119,30 @@ impl Transaction<'_>
             let is_nullable = match stmt.omd.is_nullable(&sw, i)? { 0 => false, _ => true };
             field_info.push(FieldInfo{ sqltype, offset, null_offset, is_nullable });
         }
-        let rs = stmt.s.open_cursor(&sw, &self.t, &stmt.imd, null(), &stmt.omd, 0)?;
-        return Ok(Rows{ t: &self, sw, rs, field_info, message });
+        let rs = stmt.s.open_cursor(&sw, &self.t, &stmt.imd, input_message.as_mut_ptr() as VoidPtr, &stmt.omd, 0)?;
+        return Ok(Rows{ t: &self, sw, rs, field_info, input_message, output_message });
+    }
+
+    fn get_input_buffer(&self, sw: &StatusWrapper, imd: &fb::MessageMetadata, params: &[&dyn SqlInput]) -> Result<Vec<u8>>
+    {
+        if imd.get_count(&sw)? as usize != params.len()
+        {
+            return Err(Error::from_str("Invalid number of input parameters")); // TODO: more info
+        }
+        let input_message_length = imd.get_message_length(&sw)?;
+        let mut input_message = Vec::<u8>::with_capacity(input_message_length as usize);
+        let input_base = input_message.as_mut_ptr();
+        for i in 0..params.len()
+        {
+            if params[i].typeid() != imd.get_type(sw, i as UInt)?
+            {
+                return Err(Error::from_str("Invalid input parameter type")); // TODO: more info
+            }
+            let offset = imd.get_offset(&sw, i as UInt)? as isize;
+            let dst = unsafe { input_base.offset(offset) };
+            params[i].input(dst);
+        }
+        return Ok(input_message);
     }
 }
 
