@@ -31,7 +31,7 @@ pub struct Transaction<'a>
 
 pub struct Statement<'a, 'b>
 {
-    t: &'a Transaction<'b>, // TODO: mb remove
+    t: &'a Transaction<'b>,
     s: fb::Statement,
     imd: fb::MessageMetadata,
     omd: fb::MessageMetadata
@@ -39,7 +39,7 @@ pub struct Statement<'a, 'b>
 
 struct FieldInfo
 {
-    pub sqltype: SqlTypeId,
+    pub typeid: SqlTypeId,
     pub offset: isize,
     pub null_offset: isize,
     pub is_nullable: bool
@@ -64,9 +64,9 @@ impl Rows<'_, '_>
     fn get<T: SqlOutput>(&self, index: usize) -> Result<Option<T>> // TODO: something without .unwrap().unwrap()
     {
         let field_info = &self.field_info[index];
-        if field_info.sqltype != T::TYPEID
+        if field_info.typeid != T::TYPEID
         {
-            panic!("Invalid SQL type {}, expected with typeid = {}", type_name::<T>(), field_info.sqltype); // TODO: type name by type id
+            panic!("Invalid SQL type {}, expected with typeid = {}", type_name::<T>(), field_info.typeid); // TODO: type name by type id
         }
         unsafe
         {
@@ -78,6 +78,7 @@ impl Rows<'_, '_>
         let ptr = unsafe { self.output_message.as_ptr().offset(field_info.offset) };
         return Ok(Some(T::output(ptr)?));
     }
+    fn get_null()
 }
 
 impl Transaction<'_>
@@ -85,6 +86,18 @@ impl Transaction<'_>
     pub fn commit(self) -> NoRes
     {
         self.t.commit(&create_status_wrapper())
+    }
+    pub fn commit_retaining(&self) -> NoRes
+    {
+        self.t.commit_retaining(&create_status_wrapper())
+    }
+    pub fn rollback(self) -> NoRes
+    {
+        self.t.rollback(&create_status_wrapper())
+    }
+    pub fn rollback_retaining(&self) -> NoRes
+    {
+        self.t.rollback_retaining(&create_status_wrapper())
     }
     pub fn prepare<S: Into<Vec<u8>>>(&self, query: S) -> Result<Statement>
     {
@@ -97,10 +110,11 @@ impl Transaction<'_>
         let omd = stmt.get_output_metadata(&s)?;
         return Ok(Statement{ t: &self, s: stmt, imd, omd });
     }
-    pub fn execute_prepared(&self, stmt: &Statement) -> Result<u64>
+    pub fn execute_prepared(&self, stmt: &Statement, params: &[&dyn SqlInput]) -> Result<u64>
     {
         let sw = create_status_wrapper();
-        stmt.s.execute(&sw, &self.t, &stmt.imd, null(), &stmt.omd, null())?;
+        let mut input_message = self.get_input_buffer(&sw, &stmt.imd, params)?;
+        stmt.s.execute(&sw, &self.t, &stmt.imd, input_message.as_mut_ptr() as VoidPtr, &stmt.omd, null())?;
         return Ok(stmt.s.get_affected_records(&sw)?);
     }
     pub fn execute_prepared_rows(&self, stmt: &Statement, params: &[&dyn SqlInput]) -> Result<Rows>
@@ -116,13 +130,12 @@ impl Transaction<'_>
             let sqltype = stmt.omd.get_type(&sw, i)?;
             let offset = stmt.omd.get_offset(&sw, i)? as isize;
             let null_offset = stmt.omd.get_null_offset(&sw, i)? as isize;
-            let is_nullable = match stmt.omd.is_nullable(&sw, i)? { 0 => false, _ => true };
-            field_info.push(FieldInfo{ sqltype, offset, null_offset, is_nullable });
+            let is_nullable = stmt.omd.is_nullable(&sw, i)? == 0;
+            field_info.push(FieldInfo{ typeid: sqltype, offset, null_offset, is_nullable });
         }
         let rs = stmt.s.open_cursor(&sw, &self.t, &stmt.imd, input_message.as_mut_ptr() as VoidPtr, &stmt.omd, 0)?;
         return Ok(Rows{ t: &self, sw, rs, field_info, input_message, output_message });
     }
-
     fn get_input_buffer(&self, sw: &StatusWrapper, imd: &fb::MessageMetadata, params: &[&dyn SqlInput]) -> Result<Vec<u8>>
     {
         if imd.get_count(&sw)? as usize != params.len()
@@ -171,6 +184,10 @@ impl Connection
         let buf = params.get_buffer()?;
         let a = p.attach_database(&sw, CString::new(filename).unwrap().as_ptr(), buf_len, buf)?;
         return Ok(Connection{ a });
+    }
+    pub fn disconnect(self) -> NoRes
+    {
+        self.a.detach(&create_status_wrapper())
     }
     pub fn transaction(&self, params: pb::Transaction) -> Result<Transaction>
     {

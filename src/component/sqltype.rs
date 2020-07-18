@@ -28,6 +28,23 @@ pub trait SqlGetTypeId
     fn typeid(&self) -> SqlTypeId;
 }
 
+// CHECK: is this right way?
+pub trait SqlCheckNull
+{
+    fn is_null(&self) -> bool { false }
+}
+
+pub trait SqlInput : SqlGetTypeId
+{
+    fn input(&self, dst: *mut u8) -> NoRes;
+}
+
+pub trait SqlOutput where Self: Sized
+{
+    const TYPEID: SqlTypeId;
+    fn output(src: *const u8) -> Result<Self>;
+}
+
 macro_rules! impl_get_type_id
 {
     ($name: ty) =>
@@ -42,20 +59,10 @@ macro_rules! impl_get_type_id
     }
 }
 
-// TODO: input of NULL
-pub trait SqlInput : SqlGetTypeId
-{
-    fn input(&self, dst: *mut u8) -> NoRes;
-}
 
-pub trait SqlOutput where Self: Sized
-{
-    const TYPEID: SqlTypeId;
-    fn output(src: *const u8) -> Result<Self>;
-}
+pub type Varchar = Vec<u8>;
 
-// Varchar
-impl SqlInput for Vec<u8>
+impl SqlInput for Varchar
 {
     fn input(&self, dst: *mut u8) -> NoRes
     {
@@ -63,12 +70,12 @@ impl SqlInput for Vec<u8>
         to_raw_memory(dst, bytes.len() as IscUShort);
         let dst = unsafe { dst.offset(size_of::<IscUShort>() as isize) };
         unsafe { libc::memcpy(dst as VoidPtr, bytes.as_ptr() as VoidCPtr, bytes.len()) };
-        // no needed *ptr.offset(bytes.len() as isize) = 0;
+        // CHECK: no needed *ptr.offset(bytes.len() as isize) = 0;
         return Ok(());
     }
 }
 
-impl SqlOutput for Vec<u8>
+impl SqlOutput for Varchar
 {
     const TYPEID: SqlTypeId = ib::SQL_VARYING;
 
@@ -77,11 +84,47 @@ impl SqlOutput for Vec<u8>
         let vclen = from_raw_memory::<IscUShort>(src);
         let src = unsafe { src.offset(size_of::<IscUShort>() as isize) };
         let slc = unsafe { slice_from_raw_parts(src, vclen as usize).as_ref().unwrap() };
-        return Ok(Vec::from(slc));
+        return Ok(Varchar::from(slc));
     }
 }
 
-impl_get_type_id!(Vec<u8>);
+impl_get_type_id!(Varchar);
+
+
+pub type Null = ();
+
+impl SqlInput for Null
+{
+    fn input(&self, dst: *mut u8) -> NoRes
+    {
+
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -93,7 +136,6 @@ macro_rules! impl_simple_type
         impl SqlOutput for $name
         {
             const TYPEID: SqlTypeId = $id;
-
             fn output(src: *const u8) -> Result<Self>
             {
                 Ok(from_raw_memory(src))
@@ -110,11 +152,17 @@ macro_rules! impl_simple_type
     }
 }
 
-impl_simple_type!(i16, ib::SQL_SHORT);  // SMALLINT
-impl_simple_type!(i32, ib::SQL_LONG);   // INTEGER
-impl_simple_type!(i64, ib::SQL_INT64);  // BIGINT
-impl_simple_type!(f32, ib::SQL_FLOAT);  // FLOAT
-impl_simple_type!(f64, ib::SQL_DOUBLE); // DOUBLE PRECISION
+pub type Smallint = i16;
+pub type Integer = i32;
+pub type Bigint = i64;
+pub type Float = f32;
+pub type Double = f64;
+
+impl_simple_type!(Smallint, ib::SQL_SHORT);
+impl_simple_type!(Integer, ib::SQL_LONG);
+impl_simple_type!(Bigint, ib::SQL_INT64);
+impl_simple_type!(Float, ib::SQL_FLOAT);
+impl_simple_type!(Double, ib::SQL_DOUBLE);
 
 
 

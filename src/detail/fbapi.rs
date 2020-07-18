@@ -2,7 +2,6 @@ use super::util::share::*;
 
 pub mod ibase;
 use ibase as ib;
-use std::io::Write;
 
 
 trait CxxClass : Sized
@@ -234,7 +233,7 @@ extern "C"
     pub fn transaction_prepare(this: TransactionPtr, status: StatusWrapperPtr, msg_length: UInt, message: CPtr<UChar>);
     pub fn transaction_commit(this: TransactionPtr, status: StatusWrapperPtr); // object destroyed
     pub fn transaction_commit_retaining(this: TransactionPtr, status: StatusWrapperPtr);
-    pub fn transaction_rollback(this: TransactionPtr, status: StatusWrapperPtr);
+    pub fn transaction_rollback(this: TransactionPtr, status: StatusWrapperPtr); // object destroyed
     pub fn transaction_rollback_retaining(this: TransactionPtr, status: StatusWrapperPtr);
     pub fn transaction_disconnect(this: TransactionPtr, status: StatusWrapperPtr);
     pub fn transaction_join(this: TransactionPtr, status: StatusWrapperPtr, transaction: TransactionPtr) -> TransactionPtr;
@@ -407,7 +406,9 @@ pub trait IStatusWrapper : IDeletable
 {
     fn new(status: Status) -> StatusWrapper
     {
-        unsafe { return StatusWrapper{ this: status_wrapper_new(status.get_this()), internal: status }; }
+        let ptr = unsafe { status_wrapper_new(status.get_this()) };
+        super::util::check_allocation(ptr);
+        return StatusWrapper{ this: ptr, internal: status };
     }
     fn clear_exception(&self)
     {
@@ -1063,7 +1064,7 @@ pub trait ITransaction : IReferenceCounted
         }
         Ok(result)
     }
-    fn rollback(&self, status: &StatusWrapper) -> NoRes
+    fn rollback(self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_rollback(self.get_this(), status.this) };
         if status.has_data() == 1

@@ -3,7 +3,7 @@ pub mod types;
 pub mod share;
 
 use super::fbapi::*;
-
+use std::ptr::null;
 
 
 pub fn from_raw_memory<T: Copy>(ptr: *const u8) -> T
@@ -31,5 +31,13 @@ pub fn create_status_wrapper() -> StatusWrapper
     let m = Master::get();
     let s = m.get_status();
     return StatusWrapper::new(s);
+}
+
+pub fn check_allocation<T>(ptr: *const T)
+{
+    if ptr == null()
+    {
+        panic!("Allocation fails, no memory");
+    }
 }
 

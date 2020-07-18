@@ -11,11 +11,10 @@ using StatusWrapper = CheckStatusWrapper;
 
 extern "C"
 {
-    // StatusWrapper
+    // StatusWrapperls
     StatusWrapper* status_wrapper_new(IStatus* status)
     {
-        // TODO: check allocation error
-        return new StatusWrapper(status);
+        return  new(std::nothrow_t{}) StatusWrapper(status);
     }
     void status_wrapper_delete(StatusWrapper* self)
     {

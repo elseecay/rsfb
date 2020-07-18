@@ -87,6 +87,13 @@ fn example_select_with_input()
     rows.fetch_next();
     let x = rows.get::<Varchar>(1).unwrap().unwrap();
     println!("{}", String::from_utf8(x).unwrap());
+    transaction.rollback();
+
+    let mut builder = pb::Transaction::new().unwrap();
+    builder.write();
+    let transaction = con.transaction(builder).unwrap();
+    let stmt = transaction.prepare("SELECT * from persons WHERE personid = ?").unwrap();
+    transaction.execute_prepared(&stmt);
     // rows.fetch_next();
     // rows.fetch_next();
     // let x = rows.get::<Varchar>(1).unwrap().unwrap();
