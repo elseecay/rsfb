@@ -28,13 +28,12 @@ pub trait SqlGetTypeId
     fn typeid(&self) -> SqlTypeId;
 }
 
-// CHECK: is this right way?
 pub trait SqlCheckNull
 {
-    fn is_null(&self) -> bool { false }
+    fn is_null(&self) -> bool;
 }
 
-pub trait SqlInput : SqlGetTypeId
+pub trait SqlInput : SqlGetTypeId + SqlCheckNull
 {
     fn input(&self, dst: *mut u8) -> NoRes;
 }
@@ -44,6 +43,7 @@ pub trait SqlOutput where Self: Sized
     const TYPEID: SqlTypeId;
     fn output(src: *const u8) -> Result<Self>;
 }
+
 
 macro_rules! impl_get_type_id
 {
@@ -59,8 +59,52 @@ macro_rules! impl_get_type_id
     }
 }
 
+macro_rules! impl_check_null
+{
+    ($name: ty) =>
+    {
+        impl SqlCheckNull for $name
+        {
+            fn is_null(&self) -> bool
+            {
+                return false;
+            }
+        }
+    }
+}
+
+
+
+pub struct Null;
+
+impl SqlCheckNull for Null
+{
+    fn is_null(&self) -> bool
+    {
+        return true;
+    }
+}
+
+impl SqlGetTypeId for Null
+{
+    fn typeid(&self) -> SqlTypeId
+    {
+        panic!("It's a bug, please report");
+    }
+}
+
+impl SqlInput for Null
+{
+    fn input(&self, dst: *mut u8) -> NoRes
+    {
+        panic!("It's a bug, please report");
+    }
+}
+
 
 pub type Varchar = Vec<u8>;
+impl_get_type_id!(Varchar);
+impl_check_null!(Varchar);
 
 impl SqlInput for Varchar
 {
@@ -88,18 +132,7 @@ impl SqlOutput for Varchar
     }
 }
 
-impl_get_type_id!(Varchar);
 
-
-pub type Null = ();
-
-impl SqlInput for Null
-{
-    fn input(&self, dst: *mut u8) -> NoRes
-    {
-
-    }
-}
 
 
 
@@ -133,6 +166,7 @@ macro_rules! impl_simple_type
     ($name: ty, $id: expr) =>
     {
         impl_get_type_id!($name);
+        impl_check_null!($name);
         impl SqlOutput for $name
         {
             const TYPEID: SqlTypeId = $id;
@@ -163,6 +197,12 @@ impl_simple_type!(Integer, ib::SQL_LONG);
 impl_simple_type!(Bigint, ib::SQL_INT64);
 impl_simple_type!(Float, ib::SQL_FLOAT);
 impl_simple_type!(Double, ib::SQL_DOUBLE);
+
+
+pub type InputSqlParams = &'static [&'static dyn SqlInput];
+
+pub const NULL: &Null = &Null{};
+pub const IN_EMPTY: InputSqlParams = &[];
 
 
 

@@ -921,7 +921,7 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Result<&Transaction>
+    fn execute<'a>(&self, status: &StatusWrapper, transaction: &'a Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Result<&'a Transaction>
     {
         let result = unsafe { attachment_execute(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };
         if status.has_data() == 1
@@ -1199,7 +1199,7 @@ pub trait IStatement : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<&Transaction>
+    fn execute<'a>(&self, status: &StatusWrapper, transaction: &'a Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<&'a Transaction>
     {
         // works only with created transaction
         let result = unsafe { statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };

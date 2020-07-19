@@ -15,7 +15,7 @@ use detail::fbapi as fb;
 use detail::fbapi::ibase as ib;
 use detail::util::*;
 use detail::util::share::*;
-
+use crate::detail::fbapi::ibase::SQL_NULL;
 
 
 pub struct Connection
@@ -29,6 +29,7 @@ pub struct Transaction<'a>
     t: fb::Transaction
 }
 
+// TODO: FLAG_REPEAT_EXECUTE
 pub struct Statement<'a, 'b>
 {
     t: &'a Transaction<'b>,
@@ -55,13 +56,29 @@ pub struct Rows<'a, 'b>
     output_message: Vec<u8>,
 }
 
+// TODO: iterator
+// TODO: cursor attribs
+pub type FetchResult = i32;
+
 impl Rows<'_, '_>
 {
-    fn fetch_next(&mut self) -> Result<i32> // TODO: return something other
+    pub const OK: FetchResult = fb::Status::RESULT_OK;
+    pub const NO_DATA: FetchResult = fb::Status::RESULT_NO_DATA;
+
+    pub fn fetch_next(&mut self) -> Result<FetchResult>
     {
         self.rs.fetch_next(&self.sw, self.output_message.as_mut_ptr() as Ptr<Void>)
     }
-    fn get<T: SqlOutput>(&self, index: usize) -> Result<Option<T>> // TODO: something without .unwrap().unwrap()
+    pub fn get<T: SqlOutput>(&self, index: usize) -> Result<T>
+    {
+        let result = self.get_null::<T>(index)?;
+        match result
+        {
+            Some(r) => Ok(r),
+            None => panic!("Unexpected NULL value, use Rows::get_null for nullable values")
+        }
+    }
+    pub fn get_null<T: SqlOutput>(&self, index: usize) -> Result<Option<T>>
     {
         let field_info = &self.field_info[index];
         if field_info.typeid != T::TYPEID
@@ -76,9 +93,9 @@ impl Rows<'_, '_>
             }
         }
         let ptr = unsafe { self.output_message.as_ptr().offset(field_info.offset) };
-        return Ok(Some(T::output(ptr)?));
+        let result = T::output(ptr)?;
+        return Ok(Some(result));
     }
-    fn get_null()
 }
 
 impl Transaction<'_>
@@ -147,6 +164,17 @@ impl Transaction<'_>
         let input_base = input_message.as_mut_ptr();
         for i in 0..params.len()
         {
+            if params[i].is_null()
+            {
+                if imd.is_nullable(&sw, i as UInt)? == 0
+                {
+                    panic!("Invalid NULL input, expected not NULL");
+                }
+                let offset = imd.get_null_offset(&sw, i as UInt)? as isize; // TODO: remove copypast
+                let dst = unsafe { input_base.offset(offset) };
+                to_raw_memory(dst, SQL_NULL as u16);
+                continue;
+            }
             if params[i].typeid() != imd.get_type(sw, i as UInt)?
             {
                 return Err(Error::from_str("Invalid input parameter type")); // TODO: more info
