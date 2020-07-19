@@ -11,7 +11,7 @@ using StatusWrapper = CheckStatusWrapper;
 
 extern "C"
 {
-    // StatusWrapperls
+    // StatusWrapper
     StatusWrapper* status_wrapper_new(IStatus* status)
     {
         return  new(std::nothrow_t{}) StatusWrapper(status);

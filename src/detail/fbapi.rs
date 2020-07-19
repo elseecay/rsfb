@@ -921,14 +921,18 @@ pub trait IAttachment : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Result<Transaction>
+    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, stmt_length: UInt, sql_stmt: CPtr<Char>, dialect: UInt, in_metadata: &MessageMetadata, in_buffer: VoidPtr, out_metadata: &MessageMetadata, out_buffer: VoidPtr) -> Result<&Transaction>
     {
-        let result = unsafe { Transaction{ this: attachment_execute(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, out_buffer) } };
+        let result = unsafe { attachment_execute(self.get_this(), status.this, transaction.this, stmt_length, sql_stmt, dialect, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };
         if status.has_data() == 1
         {
             return Err(Error::from_sw(&status));
         }
-        Ok(result)
+        if result != transaction.this
+        {
+            panic!("It's a bug or bad docs consequence, please report it");
+        }
+        Ok(transaction)
     }
     fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes
     {
@@ -1027,30 +1031,30 @@ impl_as_def!(Attachment, IReferenceCounted, IAttachment);
 
 pub trait ITransaction : IReferenceCounted
 {
-    fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes
-    {
-        let result = unsafe { transaction_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
-        if status.has_data() == 1
-        {
-            return Err(Error::from_sw(&status));
-        }
-        Ok(result)
-    }
-    fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>) -> NoRes
-    {
-        let result = unsafe { transaction_prepare(self.get_this(), status.this, msg_length, message) };
-        if status.has_data() == 1
-        {
-            return Err(Error::from_sw(&status));
-        }
-        Ok(result)
-    }
+    // fn get_info(&self, status: &StatusWrapper, items_length: UInt, items: CPtr<UChar>, buffer_length: UInt, buffer: Ptr<UChar>) -> NoRes // You should not need to use it (API GUIDE)
+    // {
+    //     let result = unsafe { transaction_get_info(self.get_this(), status.this, items_length, items, buffer_length, buffer) };
+    //     if status.has_data() == 1
+    //     {
+    //         return Err(Error::from_sw(&status));
+    //     }
+    //     Ok(result)
+    // }
+    // fn prepare(&self, status: &StatusWrapper, msg_length: UInt, message: CPtr<UChar>) -> NoRes
+    // {
+    //     let result = unsafe { transaction_prepare(self.get_this(), status.this, msg_length, message) };
+    //     if status.has_data() == 1
+    //     {
+    //         return Err(Error::from_sw(status));
+    //     }
+    //     Ok(result)
+    // }
     fn commit(mut self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_commit(self.get_this(), status.this) };
         if status.has_data() == 1
         {
-            return Err(Error::from_sw(&status));
+            return Err(Error::from_sw(status));
         }
         self.set_state_destroyed();
         Ok(result)
@@ -1060,17 +1064,18 @@ pub trait ITransaction : IReferenceCounted
         let result = unsafe { transaction_commit_retaining(self.get_this(), status.this) };
         if status.has_data() == 1
         {
-            return Err(Error::from_sw(&status));
+            return Err(Error::from_sw(status));
         }
         Ok(result)
     }
-    fn rollback(self, status: &StatusWrapper) -> NoRes
+    fn rollback(mut self, status: &StatusWrapper) -> NoRes
     {
         let result = unsafe { transaction_rollback(self.get_this(), status.this) };
         if status.has_data() == 1
         {
-            return Err(Error::from_sw(&status));
+            return Err(Error::from_sw(status));
         }
+        self.set_state_destroyed();
         Ok(result)
     }
     fn rollback_retaining(&self, status: &StatusWrapper) -> NoRes
@@ -1078,46 +1083,48 @@ pub trait ITransaction : IReferenceCounted
         let result = unsafe { transaction_rollback_retaining(self.get_this(), status.this) };
         if status.has_data() == 1
         {
-            return Err(Error::from_sw(&status));
+            return Err(Error::from_sw(status));
         }
         Ok(result)
     }
-    fn disconnect(&self, status: &StatusWrapper) -> NoRes
-    {
-        let result = unsafe { transaction_disconnect(self.get_this(), status.this) };
-        if status.has_data() == 1
-        {
-            return Err(Error::from_sw(&status));
-        }
-        Ok(result)
-    }
-    fn join(&self, status: &StatusWrapper, transaction: &Transaction) -> Result<Transaction>
+    // fn disconnect(&self, status: &StatusWrapper) -> NoRes // cant find docs for this
+    // {
+    //     let result = unsafe { transaction_disconnect(self.get_this(), status.this) };
+    //     if status.has_data() == 1
+    //     {
+    //         return Err(Error::from_sw(&status));
+    //     }
+    //     Ok(result)
+    // }
+    fn join(mut self, status: &StatusWrapper, mut transaction: Transaction) -> Result<Transaction>
     {
         let result = unsafe { Transaction{ this: transaction_join(self.get_this(), status.this, transaction.this) } };
         if status.has_data() == 1
         {
-            return Err(Error::from_sw(&status));
+            return Err(Error::from_sw(status));
         }
+        self.set_state_destroyed();
+        transaction.set_state_destroyed();
         Ok(result)
     }
-    fn validate(&self, status: &StatusWrapper, attachment: &Attachment) -> Result<Transaction>
-    {
-        let result = unsafe { Transaction{ this: transaction_validate(self.get_this(), status.this, attachment.this) } };
-        if status.has_data() == 1
-        {
-            return Err(Error::from_sw(&status));
-        }
-        Ok(result)
-    }
-    fn enter_dtc(&self, status: &StatusWrapper) -> Result<Transaction>
-    {
-        let result = unsafe { Transaction{ this: transaction_enter_dtc(self.get_this(), status.this) } };
-        if status.has_data() == 1
-        {
-            return Err(Error::from_sw(&status));
-        }
-        Ok(result)
-    }
+    // fn validate(&self, status: &StatusWrapper, attachment: &Attachment) -> Result<Transaction> // cant find docs for this
+    // {
+    //     let result = unsafe { Transaction{ this: transaction_validate(self.get_this(), status.this, attachment.this) } };
+    //     if status.has_data() == 1
+    //     {
+    //         return Err(Error::from_sw(&status));
+    //     }
+    //     Ok(result)
+    // }
+    // fn enter_dtc(&self, status: &StatusWrapper) -> Result<Transaction> // cant find docs for this
+    // {
+    //     let result = unsafe { Transaction{ this: transaction_enter_dtc(self.get_this(), status.this) } };
+    //     if status.has_data() == 1
+    //     {
+    //         return Err(Error::from_sw(&status));
+    //     }
+    //     Ok(result)
+    // }
 }
 
 impl_as_def!(Transaction, IReferenceCounted, ITransaction);
@@ -1192,13 +1199,17 @@ pub trait IStatement : IReferenceCounted
         }
         Ok(result)
     }
-    fn execute<'a>(&self, status: &StatusWrapper, transaction: &'a Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<&'a Transaction>
+    fn execute(&self, status: &StatusWrapper, transaction: &Transaction, in_metadata: &MessageMetadata, in_buffer: Ptr<Void>, out_metadata: &MessageMetadata, out_buffer: Ptr<Void>) -> Result<&Transaction>
     {
-        // TODO: fix double free problem with Result<&Transaction> instead of Result<Transaction> in all functions like this
-        unsafe { statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };
+        // works only with created transaction
+        let result = unsafe { statement_execute(self.get_this(), status.this, transaction.this, in_metadata.this, in_buffer, out_metadata.this, out_buffer) };
         if status.has_data() == 1
         {
             return Err(Error::from_sw(&status));
+        }
+        if result != transaction.this
+        {
+            panic!("It's a bug or bad docs consequence, please report it");
         }
         return Ok(transaction);
     }

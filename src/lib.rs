@@ -130,7 +130,7 @@ impl Transaction<'_>
             let sqltype = stmt.omd.get_type(&sw, i)?;
             let offset = stmt.omd.get_offset(&sw, i)? as isize;
             let null_offset = stmt.omd.get_null_offset(&sw, i)? as isize;
-            let is_nullable = stmt.omd.is_nullable(&sw, i)? == 0;
+            let is_nullable = stmt.omd.is_nullable(&sw, i)? != 0;
             field_info.push(FieldInfo{ typeid: sqltype, offset, null_offset, is_nullable });
         }
         let rs = stmt.s.open_cursor(&sw, &self.t, &stmt.imd, input_message.as_mut_ptr() as VoidPtr, &stmt.omd, 0)?;
