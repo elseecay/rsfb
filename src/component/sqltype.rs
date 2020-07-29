@@ -199,10 +199,10 @@ impl_simple_type!(Float, ib::SQL_FLOAT);
 impl_simple_type!(Double, ib::SQL_DOUBLE);
 
 
-pub type InputSqlParams = &'static [&'static dyn SqlInput];
+pub type InputSqlParams = &'static [&'static dyn SqlInput]; // CHECK: static?
 
 pub const NULL: &Null = &Null{};
-pub const IN_EMPTY: InputSqlParams = &[];
+pub const EMPTY_IN: InputSqlParams = &[];
 
 
 

@@ -14,7 +14,7 @@ extern "C"
     // StatusWrapper
     StatusWrapper* status_wrapper_new(IStatus* status)
     {
-        return  new(std::nothrow_t{}) StatusWrapper(status);
+        return new(std::nothrow_t{}) StatusWrapper(status);
     }
     void status_wrapper_delete(StatusWrapper* self)
     {
@@ -94,7 +94,11 @@ extern "C"
         return self->release();
     }
 
-    // IMaster 
+    // IMaster
+    IMaster* master_get_interface()
+    {
+        return fb_get_master_interface();
+    }
     IStatus* master_get_status(IMaster* self)
     {
         return self->getStatus();

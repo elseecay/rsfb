@@ -67,8 +67,6 @@ fn example_select()
 #[test]
 fn example_select_with_input()
 {
-    type Varchar = Vec<u8>;
-
     let mut builder = pb::Connect::new().unwrap();
     builder.user("lck");
     builder.password("1");
@@ -76,11 +74,14 @@ fn example_select_with_input()
     let mut builder = pb::Transaction::new().unwrap();
     builder.read();
     let transaction = con.transaction(builder).unwrap();
-    let stmt = transaction.prepare("SELECT * from persons WHERE personid = ?").unwrap();
-    let mut rows = transaction.execute_prepared_rows(&stmt, &[sql::NULL]).unwrap();
-    rows.fetch_next();
-    let x = rows.get::<Varchar>(1).unwrap();
-    println!("{}", String::from_utf8(x).unwrap());
+    let stmt = transaction.prepare("SELECT * from persons WHERE lastname = ?").unwrap();
+    let mut rows = transaction.execute_prepared_rows(&stmt, &[&Varchar::from("lastname")]).unwrap();
+    while rows.fetch_next().unwrap() == Rows::OK
+    {
+        let id = rows.get::<Integer>(0).unwrap();
+        let name = rows.get::<Varchar>(1).unwrap();
+        println!("id = {}, name = {}", id, String::from_utf8(name).unwrap());
+    }
     transaction.commit();
 
     // let mut builder = pb::Transaction::new().unwrap();

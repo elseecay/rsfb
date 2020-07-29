@@ -78,7 +78,7 @@ impl Rows<'_, '_>
             None => panic!("Unexpected NULL value, use Rows::get_null for nullable values")
         }
     }
-    pub fn get_null<T: SqlOutput>(&self, index: usize) -> Result<Option<T>>
+    pub fn get_null<T: SqlOutput>(&self, index: usize) -> Result<Option<T>> // TODO: rework
     {
         let field_info = &self.field_info[index];
         if field_info.typeid != T::TYPEID

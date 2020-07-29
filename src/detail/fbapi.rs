@@ -115,6 +115,7 @@ declare_cxx_class!(CryptKeyCallback, CryptKeyCallbackPtr, CryptKeyCallbackCPtr);
 declare_cxx_class!(VersionCallback, VersionCallbackPtr, VersionCallbackCPtr);
 declare_cxx_class!(OffsetsCallback, OffsetsCallbackPtr, OffsetsCallbackCPtr);
 
+
 #[link(name = "cfbapi")]
 extern "C"
 {
@@ -144,6 +145,7 @@ extern "C"
     pub fn reference_counted_release(this: ReferenceCountedPtr) -> Int;
 
     // IMaster
+    pub fn master_get_interface() -> MasterPtr;
     pub fn master_get_status(this: MasterPtr) -> StatusPtr;
     pub fn master_get_dispatcher(this: MasterPtr) -> ProviderPtr;
     pub fn master_get_plugin_manager(this: MasterPtr) -> PluginManagerPtr;
@@ -295,12 +297,6 @@ extern "C"
     pub fn result_set_get_metadata(this: ResultSetPtr, status: StatusWrapperPtr) -> MessageMetadataPtr;
     pub fn result_set_close(this: ResultSetPtr, status: StatusWrapperPtr);
     pub fn result_set_set_delayed_output_format(this: ResultSetPtr, status: StatusWrapperPtr, format: MessageMetadataPtr);
-}
-
-#[link(name = "fbclient")]
-extern "C"
-{
-    pub fn fb_get_master_interface() -> MasterPtr;
 }
 
 pub trait IVersioned : CxxClass
@@ -490,7 +486,7 @@ pub trait IMaster : IVersioned
 {
     fn get() -> Master
     {
-        unsafe { return Master{ this: fb_get_master_interface() }; }
+        unsafe { return Master{ this: master_get_interface() }; }
     }
     fn get_status(&self) -> Status
     {
