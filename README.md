@@ -1,8 +1,6 @@
 ## rsfb
+DEVELOPMENT PAUSED
+
 Firebird Driver that uses new Object-Oriented API backend
 
-- [ ] BLOB support
-- [ ] Array support
-- [ ] MySQL like API
-
-You can check alternative project [here](https://github.com/fernandobatels/rsfbclient)
+You can check alternative project [here](https://github.com/fernandobatels/rsfbclient), which is likely actively developing now
