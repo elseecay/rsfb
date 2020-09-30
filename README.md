@@ -1,5 +1,5 @@
 ## rsfb
-DEVELOPMENT PAUSED
+DEVELOPMENT PAUSED (may be forever)
 
 Firebird Driver that uses new Object-Oriented API backend
 
